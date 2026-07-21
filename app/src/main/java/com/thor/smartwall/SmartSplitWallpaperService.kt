@@ -28,6 +28,7 @@ import com.thor.smartwall.Prefs.orientationVertical
 import com.thor.smartwall.Prefs.rotationOverrideDegrees
 import com.thor.smartwall.Prefs.swapOrder
 import com.thor.smartwall.Prefs.videoSmoothMode
+import com.thor.smartwall.Prefs.videoSmoothness
 import com.thor.smartwall.Prefs.videoUri
 import kotlin.math.cos
 import kotlin.math.min
@@ -356,7 +357,7 @@ class SmartSplitWallpaperService : WallpaperService() {
                     val frameCount = smoothness.frameCount
                     val frames = mutableListOf<Bitmap>()
                     for (i in 0 until frameCount) {
-                        val timeUs = durationMs * 1000L * i / frameCount
+                        val timeUs = durationMs * 1000L * i.toLong() / frameCount.toLong()
                         val raw = try {
                             retriever.getScaledFrameAtTime(
                                 timeUs, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
