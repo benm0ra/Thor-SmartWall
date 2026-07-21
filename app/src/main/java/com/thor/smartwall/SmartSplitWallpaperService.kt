@@ -25,6 +25,7 @@ import com.thor.smartwall.Prefs.imageUriSecondary
 import com.thor.smartwall.Prefs.independentMode
 import com.thor.smartwall.Prefs.mode
 import com.thor.smartwall.Prefs.orientationVertical
+import com.thor.smartwall.Prefs.rotationOverrideDegrees
 import com.thor.smartwall.Prefs.swapOrder
 import com.thor.smartwall.Prefs.videoUri
 import kotlin.math.cos
