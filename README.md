@@ -28,13 +28,24 @@ build `app-debug.apk` for you automatically and let you download it.
 ## If splitting still doesn't look right
 Tap **Show Screen Info (diagnostics)** in the app with the Thor open. It
 lists exactly what Android's `DisplayManager` sees system-wide right now.
-This settles the one real unknown flagged since the start of this project:
-whether the Thor's launcher actually hands the wallpaper service two
-separate displays (which is what per-Engine splitting depends on), or
-whether Android only ever sees one combined panel. If it reports one
-display, the per-screen split has to happen at the OS/launcher level, not in
-this app — use **Export Split Images** and assign each PNG manually through
-whatever per-screen picker the Thor's Settings app offers instead.
+
+On real Thor hardware this turned up something concrete: DisplayManager
+reports both panels **landscape-shaped** (e.g. `1920x1080` and `1240x1080` -
+width bigger than height) even though they're physically used stacked
+top-over-bottom in portrait. The app now detects that mismatch against the
+"stacked vertically" setting and rotates its drawing to compensate
+automatically. I can't test the actual rotation *direction* on real
+hardware, though, so there's a **Rotate Compensation 90°** button under
+"Orientation Fix" as a one-tap manual override if art still looks sideways
+or upside-down once applied - cycle it and re-apply until it looks right.
+This fix currently covers Static/Ken Burns/GIF; Video mode draws directly to
+the surface via MediaPlayer and isn't covered by it yet.
+
+If **Show Screen Info** ever reports only one display instead of two, that's
+a different, unfixable-in-software situation: the per-screen split has to
+happen at the OS/launcher level, not in this app — use **Export Split
+Images** and assign each PNG manually through whatever per-screen picker the
+Thor's Settings app offers instead.
 
 ## Searching for GIFs online
 **Search GIFs Online** uses GIPHY's public API. You'll need your own free
@@ -43,6 +54,15 @@ key is rate-limited to 100 calls/hour, plenty for personal use) — the app
 prompts for it the first time and links straight to the signup page. Note:
 Tenor (Google's GIF API) stopped issuing new developer keys as of January
 2026, which is why this uses GIPHY instead.
+
+## Background behavior
+The wallpaper Engine is a genuine Android system service once applied — it
+keeps running whether or not the app is open, with no extra code needed for
+that. The **Keep Running in Background** button under "Background & Power"
+exists for a different, real problem: some phone makers' battery managers
+kill backgrounded app processes aggressively, which can affect this too.
+Requesting exemption from battery optimization is the one thing an app is
+actually allowed to do about that.
 
 ## How to use it once installed
 1. Open **ThorPaper**, pick an image.

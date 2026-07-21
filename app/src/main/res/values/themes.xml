@@ -2,7 +2,76 @@
 <resources>
     <style name="Theme.ThorSmartWall" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="colorPrimary">#7C4DFF</item>
-        <item name="android:statusBarColor">#111318</item>
-        <item name="android:windowBackground">#111318</item>
+        <item name="android:statusBarColor">#0D0F13</item>
+        <item name="android:windowBackground">#0D0F13</item>
+    </style>
+
+    <style name="SectionLabel">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:textColor">#8A7CFF</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.08</item>
+        <item name="android:layout_marginTop">22dp</item>
+        <item name="android:layout_marginBottom">8dp</item>
+    </style>
+
+    <style name="Card">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:background">@drawable/card_bg</item>
+        <item name="android:padding">16dp</item>
+    </style>
+
+    <style name="CardButton" parent="Widget.AppCompat.Button">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">8dp</item>
+        <item name="android:background">@drawable/card_button_bg</item>
+        <item name="android:textColor">#E4E6EB</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:paddingTop">12dp</item>
+        <item name="android:paddingBottom">12dp</item>
+    </style>
+
+    <style name="CardSwitch">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">#E4E6EB</item>
+        <item name="android:layout_marginTop">6dp</item>
+    </style>
+
+    <style name="CardHint">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">#7A8090</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:layout_marginTop">2dp</item>
+    </style>
+
+    <style name="CardDivider">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">1dp</item>
+        <item name="android:background">#22FFFFFF</item>
+        <item name="android:layout_marginTop">14dp</item>
+        <item name="android:layout_marginBottom">6dp</item>
+    </style>
+
+    <style name="CardLabel">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">#E4E6EB</item>
+        <item name="android:textSize">13sp</item>
+    </style>
+
+    <style name="CardRadio">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">#E4E6EB</item>
+        <item name="android:layout_marginTop">4dp</item>
+        <item name="android:buttonTint">#7C4DFF</item>
     </style>
 </resources>

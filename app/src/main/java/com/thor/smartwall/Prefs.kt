@@ -20,6 +20,7 @@ object Prefs {
     private const val KEY_INDEPENDENT = "independent_mode"
     private const val KEY_EPOCH = "motion_epoch"
     private const val KEY_ORIENTATION = "orientation"
+    private const val KEY_ROTATION_OVERRIDE = "rotation_override_degrees"
 
     private fun sp(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -57,12 +58,23 @@ object Prefs {
         set(v) = sp(this).edit().putBoolean(KEY_SWAP, v).apply()
 
     var Context.independentMode: Boolean
-        get() = sp(this).getBoolean(KEY_INDEPENDENT, false)
+        get() = sp(this).getBoolean(KEY_INDEPENDENT, true)
         set(v) = sp(this).edit().putBoolean(KEY_INDEPENDENT, v).apply()
 
     var Context.orientationVertical: Boolean
         get() = sp(this).getBoolean(KEY_ORIENTATION, true)
         set(v) = sp(this).edit().putBoolean(KEY_ORIENTATION, v).apply()
+
+    /**
+     * Manual fallback on top of the auto-detected rotation fix (see SmartSplitWallpaperService).
+     * Auto-detection infers the right compensation from the orientation setting plus what
+     * DisplayManager reports, but I can't test the actual rotation *direction* (90 vs 270) on
+     * real Thor hardware, so this lets the person flip it with one tap if it's backwards rather
+     * than needing another code round-trip. Cycles 0 -> 90 -> 180 -> 270 -> 0.
+     */
+    var Context.rotationOverrideDegrees: Int
+        get() = sp(this).getInt(KEY_ROTATION_OVERRIDE, 0)
+        set(v) = sp(this).edit().putInt(KEY_ROTATION_OVERRIDE, v).apply()
 
     /**
      * Shared "time zero" for the Ken Burns motion and for video-loop resync.

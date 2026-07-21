@@ -44,7 +44,9 @@ class SmartSplitWallpaperService : WallpaperService() {
 
         // Everything below is resolved lazily once we know which display we're on.
         private var myScreen: ScreenSpec? = null
-        private var allScreens: List<ScreenSpec> = emptyList()
+        private var myLogicalScreen: ScreenSpec? = null
+        private var myRotationDegrees: Int = 0
+        private var allScreensLogical: List<ScreenSpec> = emptyList()
         private var readyBitmap: Bitmap? = null
         private var gifDrawable: AnimatedImageDrawable? = null
 
@@ -151,18 +153,47 @@ class SmartSplitWallpaperService : WallpaperService() {
             }
         }
 
-        /** Figures out which physical display this Engine instance belongs to, using the
-         *  real, per-display Context that getDisplayContext() gives us. This is the crux of
-         *  the whole "correctly split across two screens" feature. */
+        /**
+         * Figures out which physical display this Engine instance belongs to, using the real,
+         * per-display Context that getDisplayContext() gives us - the crux of splitting across
+         * two screens at all.
+         *
+         * On the Thor specifically, DisplayManager reports both panels landscape-shaped (e.g.
+         * 1920x1080 and 1240x1080 - width bigger than height) even when they're physically used
+         * stacked top-over-bottom in portrait, per the "Show Screen Info" diagnostic. So on top of
+         * matching displays, this also detects that mismatch against the orientation you've told
+         * the app about (stacked vertically = expect each screen taller than wide) and works out
+         * the canvas rotation needed to compensate, so what we draw ends up upright instead of
+         * sideways. [rotationOverrideDegrees] is a manual nudge on top of that auto-detection, in
+         * case the actual rotation direction on real hardware turns out to be the mirror of what
+         * was guessed - flip it once from the app if art looks sideways/upside-down.
+         */
         private fun resolveScreenGeometry() {
             val displayContext = getDisplayContext() ?: applicationContext
             val display: Display? = displayContext.display
-            val swap = applicationContext.swapOrder
-            allScreens = DisplayDetector.findScreens(applicationContext, swap)
+            val ctx = applicationContext
+            val swap = ctx.swapOrder
+            val vertical = ctx.orientationVertical
+            val raw = DisplayDetector.findScreens(ctx, swap)
+
+            allScreensLogical = raw.map { toLogicalScreen(it, vertical) }
+
             val myId = display?.displayId ?: Display.DEFAULT_DISPLAY
-            myScreen = allScreens.firstOrNull { it.displayId == myId }
-                ?: allScreens.firstOrNull()
+            val rawMine = raw.firstOrNull { it.displayId == myId } ?: raw.firstOrNull()
+            myScreen = rawMine
+            myLogicalScreen = rawMine?.let { toLogicalScreen(it, vertical) }
+
+            val autoDegrees = if (rawMine != null && needsRotationSwap(rawMine, vertical)) 90 else 0
+            myRotationDegrees = (autoDegrees + ctx.rotationOverrideDegrees).mod(360)
         }
+
+        /** True if this screen's raw reported shape doesn't match what the chosen stacking orientation expects. */
+        private fun needsRotationSwap(s: ScreenSpec, verticalStack: Boolean): Boolean =
+            if (verticalStack) s.widthPx > s.heightPx else s.heightPx > s.widthPx
+
+        /** The screen's dimensions in the orientation we actually want to crop/draw for, swapped if needed. */
+        private fun toLogicalScreen(s: ScreenSpec, verticalStack: Boolean): ScreenSpec =
+            if (needsRotationSwap(s, verticalStack)) s.copy(widthPx = s.heightPx, heightPx = s.widthPx) else s
 
         private fun prepareContentForCurrentMode(holder: SurfaceHolder) {
             val ctx = applicationContext
@@ -180,7 +211,7 @@ class SmartSplitWallpaperService : WallpaperService() {
             gifDrawable = null
 
             val ctx = applicationContext
-            val screen = myScreen ?: return
+            val screen = myLogicalScreen ?: return
             val overscanAmount = if (ctx.mode == WallMode.KEN_BURNS) overscan else 0f
 
             readyBitmap = try {
@@ -188,14 +219,14 @@ class SmartSplitWallpaperService : WallpaperService() {
                     val primary = loadBitmap(ctx.imageUri) ?: return
                     val secondary = loadBitmap(ctx.imageUriSecondary) ?: primary
                     val sources = mapOf(
-                        (allScreens.getOrNull(0)?.displayId ?: 0) to primary,
-                        (allScreens.getOrNull(1)?.displayId ?: 1) to secondary
+                        (allScreensLogical.getOrNull(0)?.displayId ?: 0) to primary,
+                        (allScreensLogical.getOrNull(1)?.displayId ?: 1) to secondary
                     )
-                    SplitEngine.computeIndependentCrops(sources, allScreens, overscanAmount)[screen.displayId]
+                    SplitEngine.computeIndependentCrops(sources, allScreensLogical, overscanAmount)[screen.displayId]
                 } else {
                     val source = loadBitmap(ctx.imageUri) ?: return
                     val orientation = if (ctx.orientationVertical) StackOrientation.VERTICAL else StackOrientation.HORIZONTAL
-                    SplitEngine.computeCrops(source, allScreens, orientation, ctx.gapFraction, overscanAmount)[screen.displayId]
+                    SplitEngine.computeCrops(source, allScreensLogical, orientation, ctx.gapFraction, overscanAmount)[screen.displayId]
                 }
             } catch (t: Throwable) {
                 null
@@ -288,32 +319,34 @@ class SmartSplitWallpaperService : WallpaperService() {
 
         private fun drawFrame() {
             val ctx = applicationContext
-            if (ctx.mode == WallMode.VIDEO) return // MediaPlayer draws directly to the surface
+            if (ctx.mode == WallMode.VIDEO) return // MediaPlayer draws directly to the surface - not covered by this fix, see README
 
             val holder = surfaceHolder
             var canvas: Canvas? = null
             try {
                 canvas = holder.lockCanvas()
                 canvas?.let { c ->
-                    when (ctx.mode) {
-                        WallMode.GIF -> {
-                            val drawable = gifDrawable
-                            if (drawable != null) {
-                                c.drawColor(Color.BLACK)
-                                drawGifCentered(c, drawable)
-                            } else {
-                                drawNoContentMessage(c)
+                    drawWithRotationCompensation(c) { w, h ->
+                        when (ctx.mode) {
+                            WallMode.GIF -> {
+                                val drawable = gifDrawable
+                                if (drawable != null) {
+                                    c.drawColor(Color.BLACK)
+                                    drawGifCentered(c, drawable, w, h)
+                                } else {
+                                    drawNoContentMessage(c, w, h)
+                                }
                             }
-                        }
-                        else -> {
-                            val bmp = readyBitmap
-                            if (bmp != null) {
-                                c.drawColor(Color.BLACK)
-                                val matrix = if (ctx.mode == WallMode.KEN_BURNS) kenBurnsMatrix(bmp, c.width, c.height)
-                                else fitMatrix(bmp, c.width, c.height)
-                                c.drawBitmap(bmp, matrix, Paint(Paint.FILTER_BITMAP_FLAG))
-                            } else {
-                                drawNoContentMessage(c)
+                            else -> {
+                                val bmp = readyBitmap
+                                if (bmp != null) {
+                                    c.drawColor(Color.BLACK)
+                                    val matrix = if (ctx.mode == WallMode.KEN_BURNS) kenBurnsMatrix(bmp, w, h)
+                                    else fitMatrix(bmp, w, h)
+                                    c.drawBitmap(bmp, matrix, Paint(Paint.FILTER_BITMAP_FLAG))
+                                } else {
+                                    drawNoContentMessage(c, w, h)
+                                }
                             }
                         }
                     }
@@ -323,15 +356,49 @@ class SmartSplitWallpaperService : WallpaperService() {
             }
         }
 
-        /** Center-crop-fills this screen's surface with the GIF's current frame, no stretching. */
-        private fun drawGifCentered(c: Canvas, drawable: AnimatedImageDrawable) {
+        /**
+         * Rotates the canvas by [myRotationDegrees] so content we draw at logical-orientation
+         * coordinates ends up upright on the physically-rotated surface Android actually gave us
+         * (see resolveScreenGeometry). Hands the block the LOGICAL width/height to draw at -
+         * Canvas#getWidth()/getHeight() always report the raw physical surface size regardless of
+         * any rotate()/translate() applied, so callers must use these instead of c.width/c.height.
+         */
+        private fun drawWithRotationCompensation(c: Canvas, draw: (w: Int, h: Int) -> Unit) {
+            when (myRotationDegrees) {
+                90 -> {
+                    c.save()
+                    c.rotate(90f)
+                    c.translate(0f, -c.width.toFloat())
+                    draw(c.height, c.width)
+                    c.restore()
+                }
+                180 -> {
+                    c.save()
+                    c.rotate(180f)
+                    c.translate(-c.width.toFloat(), -c.height.toFloat())
+                    draw(c.width, c.height)
+                    c.restore()
+                }
+                270 -> {
+                    c.save()
+                    c.rotate(270f)
+                    c.translate(-c.height.toFloat(), 0f)
+                    draw(c.height, c.width)
+                    c.restore()
+                }
+                else -> draw(c.width, c.height)
+            }
+        }
+
+        /** Center-crop-fills the given logical area with the GIF's current frame, no stretching. */
+        private fun drawGifCentered(c: Canvas, drawable: AnimatedImageDrawable, w: Int, h: Int) {
             val dw = drawable.intrinsicWidth.takeIf { it > 0 } ?: return
             val dh = drawable.intrinsicHeight.takeIf { it > 0 } ?: return
-            val scale = maxOf(c.width.toFloat() / dw, c.height.toFloat() / dh)
+            val scale = maxOf(w.toFloat() / dw, h.toFloat() / dh)
             val scaledW = dw * scale
             val scaledH = dh * scale
-            val dx = (c.width - scaledW) / 2f
-            val dy = (c.height - scaledH) / 2f
+            val dx = (w - scaledW) / 2f
+            val dy = (h - scaledH) / 2f
 
             c.save()
             c.translate(dx, dy)
@@ -346,7 +413,7 @@ class SmartSplitWallpaperService : WallpaperService() {
          * something failed to load (permission lost, file moved, bad format, etc) rather than
          * the app just not doing anything.
          */
-        private fun drawNoContentMessage(c: Canvas) {
+        private fun drawNoContentMessage(c: Canvas, w: Int, h: Int) {
             c.drawColor(Color.parseColor("#3A1620"))
             val textPaint = Paint().apply {
                 color = Color.WHITE
@@ -354,8 +421,8 @@ class SmartSplitWallpaperService : WallpaperService() {
                 isAntiAlias = true
                 textAlign = Paint.Align.CENTER
             }
-            c.drawText("ThorPaper: no image loaded", c.width / 2f, c.height / 2f, textPaint)
-            c.drawText("Reopen the app and pick media again", c.width / 2f, c.height / 2f + 50f, textPaint)
+            c.drawText("ThorPaper: no image loaded", w / 2f, h / 2f, textPaint)
+            c.drawText("Reopen the app and pick media again", w / 2f, h / 2f + 50f, textPaint)
         }
 
         /** Straight fill: bitmap already matches the surface size (this is the STATIC path). */

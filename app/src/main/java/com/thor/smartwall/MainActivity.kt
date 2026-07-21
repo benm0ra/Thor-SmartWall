@@ -19,6 +19,7 @@ import com.thor.smartwall.Prefs.imageUriSecondary
 import com.thor.smartwall.Prefs.independentMode
 import com.thor.smartwall.Prefs.mode
 import com.thor.smartwall.Prefs.orientationVertical
+import com.thor.smartwall.Prefs.rotationOverrideDegrees
 import com.thor.smartwall.Prefs.swapOrder
 import com.thor.smartwall.Prefs.videoUri
 import com.thor.smartwall.databinding.ActivityMainBinding
@@ -94,6 +95,8 @@ class MainActivity : AppCompatActivity() {
         binding.switchIndependent.setOnCheckedChangeListener { _, checked ->
             independentMode = checked
             binding.btnPickSecondary.isEnabled = checked
+            binding.seekGap.isEnabled = !checked
+            binding.labelHingeGap.alpha = if (checked) 0.4f else 1f
             renderPreview()
         }
         binding.switchSwap.setOnCheckedChangeListener { _, checked ->
@@ -124,6 +127,11 @@ class MainActivity : AppCompatActivity() {
         binding.btnApplyLive.setOnClickListener { applyAsLiveWallpaper() }
         binding.btnExport.setOnClickListener { exportSplitImages() }
         binding.btnDiagnostics.setOnClickListener { showScreenDiagnostics() }
+        binding.btnBatteryOptimization.setOnClickListener { requestBatteryExemption() }
+        binding.btnRotationFix.setOnClickListener {
+            rotationOverrideDegrees = (rotationOverrideDegrees + 90) % 360
+            updateRotationLabel()
+        }
 
         renderPreview()
     }
@@ -133,11 +141,18 @@ class MainActivity : AppCompatActivity() {
         restoreUiFromPrefs()
     }
 
+    private fun updateRotationLabel() {
+        binding.labelRotationValue.text = getString(R.string.rotation_current_value, rotationOverrideDegrees)
+    }
+
     private fun restoreUiFromPrefs() {
+        updateRotationLabel()
         binding.switchIndependent.isChecked = independentMode
         binding.switchSwap.isChecked = swapOrder
         binding.switchVertical.isChecked = orientationVertical
         binding.btnPickSecondary.isEnabled = independentMode
+        binding.seekGap.isEnabled = !independentMode
+        binding.labelHingeGap.alpha = if (independentMode) 0.4f else 1f
         when (mode) {
             WallMode.STATIC -> binding.radioStatic.isChecked = true
             WallMode.KEN_BURNS -> binding.radioKenBurns.isChecked = true
@@ -312,6 +327,31 @@ class MainActivity : AppCompatActivity() {
             .setMessage(sb.toString())
             .setPositiveButton(android.R.string.ok, null)
             .show()
+    }
+
+    /**
+     * Once applied, the wallpaper Engine is a genuine Android system service and keeps running
+     * whether or not this Activity is open - that part needs no code from us. What this button
+     * actually addresses is a different, real problem: some OEM battery managers aggressively
+     * kill backgrounded app processes (including, sometimes, the process hosting a wallpaper
+     * service) to save power. Asking to be exempted from battery optimization is the one thing
+     * an app is allowed to do about that; it can't grant itself immunity beyond this.
+     */
+    private fun requestBatteryExemption() {
+        val pm = getSystemService(android.os.PowerManager::class.java)
+        if (pm.isIgnoringBatteryOptimizations(packageName)) {
+            Toast.makeText(this, R.string.battery_already_exempt, Toast.LENGTH_SHORT).show()
+            return
+        }
+        try {
+            val intent = Intent(
+                android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                Uri.parse("package:$packageName")
+            )
+            startActivity(intent)
+        } catch (_: Exception) {
+            Toast.makeText(this, R.string.battery_exempt_request_failed, Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun savePng(bitmap: Bitmap, file: File) {
