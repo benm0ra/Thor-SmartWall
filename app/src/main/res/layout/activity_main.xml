@@ -84,9 +84,8 @@
             <TextView style="@style/SectionLabel" android:text="@string/section_source" />
         </LinearLayout>
         <LinearLayout style="@style/Card">
-            <Button style="@style/CardButton" android:id="@+id/btnPickImage" android:text="@string/pick_image" />
-            <Button style="@style/CardButton" android:id="@+id/btnPickVideo" android:text="@string/pick_video" />
-            <Button style="@style/CardButton" android:id="@+id/btnPickGif" android:text="@string/pick_gif" />
+            <Button style="@style/CardButton" android:id="@+id/btnPickWallpaper" android:text="@string/pick_wallpaper_unified" />
+            <TextView style="@style/CardHint" android:layout_marginTop="4dp" android:text="@string/pick_wallpaper_hint" />
             <Button style="@style/CardButton" android:id="@+id/btnSearchGifs" android:text="@string/search_gifs_online" />
         </LinearLayout>
 
@@ -150,6 +149,17 @@
                 <RadioButton style="@style/CardRadio" android:id="@+id/radioVideo" android:text="@string/mode_video" />
                 <RadioButton style="@style/CardRadio" android:id="@+id/radioGif" android:text="@string/mode_gif" />
             </RadioGroup>
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/switchVideoSmooth"
+                style="@style/CardSwitch"
+                android:layout_marginStart="24dp"
+                android:layout_marginTop="6dp"
+                android:text="@string/video_smooth_toggle" />
+            <TextView
+                style="@style/CardHint"
+                android:layout_marginStart="24dp"
+                android:text="@string/video_smooth_hint" />
         </LinearLayout>
 
         <!-- Card: Orientation Fix -->

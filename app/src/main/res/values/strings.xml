@@ -3,9 +3,9 @@
     <string name="app_name">ThorPaper</string>
     <string name="tagline">One image or video, correctly split across both Thor screens.</string>
     <string name="wallpaper_description">Splits one image continuously across the Thor\'s two screens, with an optional slow Ken Burns pan/zoom.</string>
-    <string name="pick_image">Choose Image</string>
-    <string name="pick_video">Choose Video (loops per-screen)</string>
-    <string name="pick_gif">Choose Animated GIF (loops per-screen)</string>
+    <string name="pick_wallpaper_unified">Choose Wallpaper</string>
+    <string name="pick_wallpaper_hint">Pick an image, GIF, or video - the app detects which one it is and sets the mode automatically.</string>
+    <string name="unsupported_file_type">That file type isn\'t supported - pick an image, GIF, or video</string>
     <string name="search_gifs_online">Search GIFs Online (GIPHY)</string>
     <string name="gif_search_title">Search GIFs</string>
     <string name="powered_by_giphy">Powered by GIPHY</string>
@@ -45,6 +45,8 @@
     <string name="mode_ken_burns">Slow pan/zoom (Ken Burns)</string>
     <string name="mode_static">Static image</string>
     <string name="mode_video">Looping video</string>
+    <string name="video_smooth_toggle">Smooth (fills each screen fully, not split)</string>
+    <string name="video_smooth_hint">Off (default): correctly split across the hinge like your images, but motion is a choppier slideshow. On: full smooth video, but both screens show the same full frame instead of a continuous split.</string>
     <string name="mode_gif">Animated GIF</string>
     <string name="apply_live_wallpaper">Set as Live Wallpaper</string>
     <string name="export_split_images">Export Split Images (PNG)</string>

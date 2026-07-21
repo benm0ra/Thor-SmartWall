@@ -21,6 +21,7 @@ import com.thor.smartwall.Prefs.mode
 import com.thor.smartwall.Prefs.orientationVertical
 import com.thor.smartwall.Prefs.rotationOverrideDegrees
 import com.thor.smartwall.Prefs.swapOrder
+import com.thor.smartwall.Prefs.videoSmoothMode
 import com.thor.smartwall.Prefs.videoUri
 import com.thor.smartwall.databinding.ActivityMainBinding
 import java.io.File
@@ -47,34 +48,52 @@ class MainActivity : AppCompatActivity() {
         previewHandler.postDelayed(previewRunnable, 60L)
     }
 
-    private val pickPrimary = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let { persistAndLoad(it, isSecondary = false) }
-    }
     private val pickSecondary = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let { persistAndLoad(it, isSecondary = true) }
     }
-    private val pickVideo = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let {
-            try {
-                contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            } catch (_: SecurityException) {
-                // Some providers still won't grant a lasting permission even through the
-                // document picker; the video will still play for this app session, it just
-                // may need re-picking after a reboot.
-            }
-            videoUri = it.toString()
-            Toast.makeText(this, R.string.video_loaded, Toast.LENGTH_SHORT).show()
-        }
+
+    /**
+     * One picker for images, GIFs, and videos - it inspects the actual MIME type of whatever
+     * was picked (not just the file extension) and routes to the right storage + mode + preview
+     * automatically, instead of making you pick the right button first.
+     */
+    private val pickWallpaper = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { handlePickedWallpaper(it) }
     }
-    private val pickGif = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let {
-            try {
-                contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            } catch (_: SecurityException) {
-                // Same caveat as the video picker above.
+
+    private fun handlePickedWallpaper(uri: Uri) {
+        try {
+            contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } catch (_: SecurityException) {
+            // Some providers won't grant a lasting permission even through the document picker;
+            // it'll still work for this session, it just may need re-picking after a reboot.
+        }
+        val type = contentResolver.getType(uri) ?: ""
+        when {
+            type == "image/gif" -> {
+                gifUri = uri.toString()
+                mode = WallMode.GIF
+                restoreUiFromPrefs()
+                renderPreview()
+                Toast.makeText(this, R.string.gif_loaded, Toast.LENGTH_SHORT).show()
             }
-            gifUri = it.toString()
-            Toast.makeText(this, R.string.gif_loaded, Toast.LENGTH_SHORT).show()
+            type.startsWith("video/") -> {
+                videoUri = uri.toString()
+                mode = WallMode.VIDEO
+                restoreUiFromPrefs()
+                renderPreview()
+                Toast.makeText(this, R.string.video_loaded, Toast.LENGTH_SHORT).show()
+            }
+            type.startsWith("image/") -> {
+                if (mode == WallMode.GIF || mode == WallMode.VIDEO) {
+                    mode = WallMode.KEN_BURNS
+                }
+                persistAndLoad(uri, isSecondary = false)
+                restoreUiFromPrefs()
+            }
+            else -> {
+                Toast.makeText(this, R.string.unsupported_file_type, Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -86,10 +105,8 @@ class MainActivity : AppCompatActivity() {
         restoreUiFromPrefs()
         loadExistingImages()
 
-        binding.btnPickImage.setOnClickListener { pickPrimary.launch(arrayOf("image/*")) }
+        binding.btnPickWallpaper.setOnClickListener { pickWallpaper.launch(arrayOf("image/*", "video/*")) }
         binding.btnPickSecondary.setOnClickListener { pickSecondary.launch(arrayOf("image/*")) }
-        binding.btnPickVideo.setOnClickListener { pickVideo.launch(arrayOf("video/*")) }
-        binding.btnPickGif.setOnClickListener { pickGif.launch(arrayOf("image/gif")) }
         binding.btnSearchGifs.setOnClickListener { startActivity(Intent(this, GifSearchActivity::class.java)) }
 
         binding.switchIndependent.setOnCheckedChangeListener { _, checked ->
@@ -121,8 +138,12 @@ class MainActivity : AppCompatActivity() {
 
         binding.radioStatic.setOnClickListener { mode = WallMode.STATIC; renderPreview() }
         binding.radioKenBurns.setOnClickListener { mode = WallMode.KEN_BURNS; renderPreview() }
-        binding.radioVideo.setOnClickListener { mode = WallMode.VIDEO }
-        binding.radioGif.setOnClickListener { mode = WallMode.GIF }
+        binding.radioVideo.setOnClickListener { mode = WallMode.VIDEO; renderPreview() }
+        binding.radioGif.setOnClickListener { mode = WallMode.GIF; renderPreview() }
+        binding.switchVideoSmooth.setOnCheckedChangeListener { _, checked ->
+            videoSmoothMode = checked
+            renderPreview()
+        }
 
         binding.btnApplyLive.setOnClickListener { applyAsLiveWallpaper() }
         binding.btnExport.setOnClickListener { exportSplitImages() }
@@ -153,6 +174,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnPickSecondary.isEnabled = independentMode
         binding.seekGap.isEnabled = !independentMode
         binding.labelHingeGap.alpha = if (independentMode) 0.4f else 1f
+        binding.switchVideoSmooth.isChecked = videoSmoothMode
         when (mode) {
             WallMode.STATIC -> binding.radioStatic.isChecked = true
             WallMode.KEN_BURNS -> binding.radioKenBurns.isChecked = true
@@ -201,8 +223,16 @@ class MainActivity : AppCompatActivity() {
         null
     }
 
-    /** Draws a live simulation of the Thor's two screens with the current split settings applied. */
+    /** Draws a live simulation of the Thor's two screens reflecting whatever is actually picked right now. */
     private fun renderPreviewNow() {
+        when (mode) {
+            WallMode.VIDEO -> renderVideoPreview()
+            WallMode.GIF -> renderGifPreview()
+            else -> renderImagePreview()
+        }
+    }
+
+    private fun renderImagePreview() {
         val screens = DisplayDetector.PREVIEW_FALLBACK
         val orientation = if (orientationVertical) StackOrientation.VERTICAL else StackOrientation.HORIZONTAL
 
@@ -220,6 +250,75 @@ class MainActivity : AppCompatActivity() {
 
         binding.previewTop.setImageBitmap(crops[screens[0].displayId])
         binding.previewBottom.setImageBitmap(crops[screens[1].displayId])
+    }
+
+    /**
+     * Video preview: decodes one frame in the background (MediaMetadataRetriever isn't cheap
+     * enough to call on the UI thread) and runs it through the same continuous-split crop the
+     * live wallpaper's split mode uses, or an independent per-screen crop for smooth mode -
+     * matching whichever behavior is actually going to happen once applied.
+     */
+    private fun renderVideoPreview() {
+        val uriStr = videoUri
+        if (uriStr == null) {
+            binding.previewTop.setImageBitmap(null)
+            binding.previewBottom.setImageBitmap(null)
+            return
+        }
+        val smooth = videoSmoothMode
+        val orientation = if (orientationVertical) StackOrientation.VERTICAL else StackOrientation.HORIZONTAL
+        val gap = gapFraction
+        Thread {
+            val frame = try {
+                android.media.MediaMetadataRetriever().use { retriever ->
+                    retriever.setDataSource(this, Uri.parse(uriStr))
+                    retriever.getScaledFrameAtTime(0L, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 480, 270)
+                        ?: retriever.getFrameAtTime(0L)
+                }
+            } catch (t: Throwable) {
+                null
+            }
+            runOnUiThread {
+                if (frame == null) {
+                    binding.previewTop.setImageBitmap(null)
+                    binding.previewBottom.setImageBitmap(null)
+                    return@runOnUiThread
+                }
+                val screens = DisplayDetector.PREVIEW_FALLBACK
+                val crops = if (smooth) {
+                    SplitEngine.computeIndependentCrops(mapOf(screens[0].displayId to frame, screens[1].displayId to frame), screens)
+                } else {
+                    SplitEngine.computeCrops(frame, screens, orientation, gap)
+                }
+                binding.previewTop.setImageBitmap(crops[screens[0].displayId])
+                binding.previewBottom.setImageBitmap(crops[screens[1].displayId])
+            }
+        }.start()
+    }
+
+    /**
+     * GIF preview: decodes the first frame in the background and just relies on the ImageViews'
+     * own centerCrop scaleType, since GIF always fills each screen independently (same as the
+     * live wallpaper's actual behavior) rather than doing a continuous split.
+     */
+    private fun renderGifPreview() {
+        val uriStr = gifUri
+        if (uriStr == null) {
+            binding.previewTop.setImageBitmap(null)
+            binding.previewBottom.setImageBitmap(null)
+            return
+        }
+        Thread {
+            val frame = try {
+                contentResolver.openInputStream(Uri.parse(uriStr))?.use { BitmapFactory.decodeStream(it) }
+            } catch (t: Throwable) {
+                null
+            }
+            runOnUiThread {
+                binding.previewTop.setImageBitmap(frame)
+                binding.previewBottom.setImageBitmap(frame)
+            }
+        }.start()
     }
 
     /** Caps the longest side so preview crops stay cheap no matter how big the source photo is. */

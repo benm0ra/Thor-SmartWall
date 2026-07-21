@@ -21,6 +21,7 @@ object Prefs {
     private const val KEY_EPOCH = "motion_epoch"
     private const val KEY_ORIENTATION = "orientation"
     private const val KEY_ROTATION_OVERRIDE = "rotation_override_degrees"
+    private const val KEY_VIDEO_SMOOTH = "video_smooth_mode"
 
     private fun sp(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -60,6 +61,19 @@ object Prefs {
     var Context.independentMode: Boolean
         get() = sp(this).getBoolean(KEY_INDEPENDENT, true)
         set(v) = sp(this).edit().putBoolean(KEY_INDEPENDENT, v).apply()
+
+    /**
+     * Video has two honest tradeoffs, not one "correct" answer:
+     * true  = smooth, full-framerate playback via MediaPlayer, but MediaPlayer can't crop a
+     *         sub-region, so both screens show the identical full frame stretched to fit.
+     * false = correctly split across the hinge (same crop math as images), but motion is a
+     *         choppier frame-sampled slideshow rather than smooth video.
+     * Defaults to the split behavior since that's what most people actually want for a
+     * dual-screen wallpaper; flip it if you'd rather have smooth motion instead.
+     */
+    var Context.videoSmoothMode: Boolean
+        get() = sp(this).getBoolean(KEY_VIDEO_SMOOTH, false)
+        set(v) = sp(this).edit().putBoolean(KEY_VIDEO_SMOOTH, v).apply()
 
     var Context.orientationVertical: Boolean
         get() = sp(this).getBoolean(KEY_ORIENTATION, true)

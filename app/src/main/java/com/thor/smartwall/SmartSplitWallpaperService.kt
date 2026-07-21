@@ -27,6 +27,7 @@ import com.thor.smartwall.Prefs.mode
 import com.thor.smartwall.Prefs.orientationVertical
 import com.thor.smartwall.Prefs.rotationOverrideDegrees
 import com.thor.smartwall.Prefs.swapOrder
+import com.thor.smartwall.Prefs.videoSmoothMode
 import com.thor.smartwall.Prefs.videoUri
 import kotlin.math.cos
 import kotlin.math.min
@@ -50,6 +51,7 @@ class SmartSplitWallpaperService : WallpaperService() {
         private var allScreensLogical: List<ScreenSpec> = emptyList()
         private var readyBitmap: Bitmap? = null
         private var gifDrawable: AnimatedImageDrawable? = null
+        private var videoFrames: List<Bitmap> = emptyList()
 
         // Lets an AnimatedImageDrawable schedule its own frame timing onto our Handler and
         // ask us to redraw when a new frame is ready - the standard way to drive a Drawable's
@@ -66,6 +68,20 @@ class SmartSplitWallpaperService : WallpaperService() {
 
         private val kenBurnsPeriodMs = 26_000L
         private val overscan = 0.16f
+
+        // Video sampling: see setupVideo() for why this exists instead of a live MediaPlayer.
+        private val videoFrameCount = 16
+        private val videoLoopMs = 6_000L
+
+        /** Which sampled video frame should be showing right now, phase-locked via the shared epoch. */
+        private fun currentVideoFrame(): Bitmap? {
+            val frames = videoFrames
+            if (frames.isEmpty()) return null
+            val epoch = Prefs.getOrCreateEpoch(applicationContext)
+            val elapsed = (SystemClock.elapsedRealtime() - epoch) % videoLoopMs
+            val idx = ((elapsed.toFloat() / videoLoopMs) * frames.size).toInt().coerceIn(0, frames.size - 1)
+            return frames[idx]
+        }
 
         private val drawRunnable = object : Runnable {
             override fun run() {
@@ -92,8 +108,11 @@ class SmartSplitWallpaperService : WallpaperService() {
 
         /** Single source of truth for starting/stopping every animated thing this Engine owns. */
         private fun updatePlaybackState() {
+            val ctx = applicationContext
             if (shouldPlay()) {
-                if (applicationContext.mode == WallMode.KEN_BURNS) {
+                val m = ctx.mode
+                val needsDrawLoop = m == WallMode.KEN_BURNS || (m == WallMode.VIDEO && !ctx.videoSmoothMode)
+                if (needsDrawLoop) {
                     handler.removeCallbacks(drawRunnable)
                     handler.post(drawRunnable)
                 }
@@ -200,6 +219,7 @@ class SmartSplitWallpaperService : WallpaperService() {
             mediaPlayer = null
             gifDrawable?.callback = null
             gifDrawable = null
+            videoFrames = emptyList()
 
             val ctx = applicationContext
             val screen = myLogicalScreen ?: return
@@ -233,7 +253,20 @@ class SmartSplitWallpaperService : WallpaperService() {
             }
         }
 
+        /**
+         * Video has two honest, mutually-exclusive tradeoffs (see Prefs.videoSmoothMode):
+         * smooth playback via MediaPlayer that can't crop (duplicated across screens), or a
+         * frame-sampled slideshow through the same crop math images use (correctly split,
+         * choppier motion). This picks whichever the person chose in the Motion section.
+         */
         private fun setupVideo(holder: SurfaceHolder) {
+            val ctx = applicationContext
+            if (ctx.videoSmoothMode) setupVideoSmooth(holder) else setupVideoSplit()
+        }
+
+        /** Smooth path: hand the file straight to MediaPlayer, which draws directly to the surface. */
+        private fun setupVideoSmooth(holder: SurfaceHolder) {
+            videoFrames = emptyList()
             readyBitmap = null
             gifDrawable?.callback = null
             gifDrawable = null
@@ -264,15 +297,74 @@ class SmartSplitWallpaperService : WallpaperService() {
         }
 
         /**
+         * Split path: samples [videoFrameCount] frames spread across the video with
+         * MediaMetadataRetriever, runs each one through the *exact same* SplitEngine crop used
+         * for images (continuous split across the hinge), and cycles through them like a
+         * slideshow at [videoLoopMs]. The honest tradeoff: motion is choppier than the source
+         * video, but it's correctly split.
+         */
+        private fun setupVideoSplit() {
+            mediaPlayer?.release()
+            mediaPlayer = null
+            gifDrawable?.callback = null
+            gifDrawable = null
+            readyBitmap = null
+            videoFrames = emptyList()
+
+            val ctx = applicationContext
+            val screen = myLogicalScreen ?: return
+            val uriStr = ctx.videoUri ?: run { drawFrame(); return }
+            val screensSnapshot = allScreensLogical
+            val orientation = if (ctx.orientationVertical) StackOrientation.VERTICAL else StackOrientation.HORIZONTAL
+            val gap = ctx.gapFraction
+
+            Thread {
+                val sampled = try {
+                    val retriever = android.media.MediaMetadataRetriever()
+                    retriever.setDataSource(ctx, uriStr.toUri())
+                    val durationMs = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
+                        ?.toLongOrNull()?.coerceAtLeast(1L) ?: 1000L
+                    val frames = mutableListOf<Bitmap>()
+                    for (i in 0 until videoFrameCount) {
+                        val timeUs = durationMs * 1000L * i / videoFrameCount
+                        val raw = try {
+                            retriever.getScaledFrameAtTime(
+                                timeUs, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 960, 540
+                            )
+                        } catch (_: Throwable) {
+                            null
+                        } ?: retriever.getFrameAtTime(timeUs, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                        val cropped = raw?.let {
+                            SplitEngine.computeCrops(it, screensSnapshot, orientation, gap)[screen.displayId]
+                        }
+                        if (cropped != null) frames.add(cropped)
+                    }
+                    retriever.release()
+                    frames
+                } catch (t: Throwable) {
+                    android.util.Log.e("ThorSmartWall", "Failed to sample video frames from $uriStr", t)
+                    emptyList()
+                }
+                handler.post {
+                    videoFrames = sampled
+                    drawFrame()
+                    updatePlaybackState()
+                }
+            }.start()
+        }
+
+        /**
          * Decodes an animated GIF with the platform's built-in ImageDecoder (available since
          * API 28, no extra library needed) and drives its frame timing off our own Handler via
-         * gifCallback. Like video, a GIF fills each screen independently rather than doing the
-         * continuous crop-across-the-hinge trick, since it's a fixed pre-baked animation rather
-         * than something we can re-render from one big virtual canvas per screen.
+         * gifCallback. Unlike video and static images, a GIF still fills each screen
+         * independently rather than doing the continuous crop-across-the-hinge trick, since it's
+         * a small fixed pre-baked animation loop rather than something worth re-sampling frame by
+         * frame the way video now is.
          */
         private fun setupGif() {
             mediaPlayer?.release()
             mediaPlayer = null
+            videoFrames = emptyList()
             readyBitmap = null
             gifDrawable?.callback = null
             gifDrawable = null
@@ -310,7 +402,7 @@ class SmartSplitWallpaperService : WallpaperService() {
 
         private fun drawFrame() {
             val ctx = applicationContext
-            if (ctx.mode == WallMode.VIDEO) return // MediaPlayer draws directly to the surface - not covered by this fix, see README
+            if (ctx.mode == WallMode.VIDEO && ctx.videoSmoothMode) return // MediaPlayer draws directly to the surface
 
             val holder = surfaceHolder
             var canvas: Canvas? = null
@@ -324,6 +416,15 @@ class SmartSplitWallpaperService : WallpaperService() {
                                 if (drawable != null) {
                                     c.drawColor(Color.BLACK)
                                     drawGifCentered(c, drawable, w, h)
+                                } else {
+                                    drawNoContentMessage(c, w, h)
+                                }
+                            }
+                            WallMode.VIDEO -> {
+                                val frame = currentVideoFrame()
+                                if (frame != null) {
+                                    c.drawColor(Color.BLACK)
+                                    c.drawBitmap(frame, fitMatrix(frame, w, h), Paint(Paint.FILTER_BITMAP_FLAG))
                                 } else {
                                     drawNoContentMessage(c, w, h)
                                 }
