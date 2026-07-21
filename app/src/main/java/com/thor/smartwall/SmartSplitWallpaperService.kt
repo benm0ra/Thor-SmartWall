@@ -64,6 +64,8 @@ class SmartSplitWallpaperService : WallpaperService() {
         @Volatile private var videoPreparing = false
         private var currentHolder: SurfaceHolder? = null
         private var contentPreparedForSurface = false
+        private var frameDecoder: VideoFrameDecoder? = null
+        @Volatile private var latestVideoFrame: Bitmap? = null
 
         // Lets an AnimatedImageDrawable schedule its own frame timing onto our Handler and
         // ask us to redraw when a new frame is ready - the standard way to drive a Drawable's
@@ -193,6 +195,9 @@ class SmartSplitWallpaperService : WallpaperService() {
             handler.removeCallbacks(drawRunnable)
             mediaPlayer?.release()
             mediaPlayer = null
+            frameDecoder?.stop()
+            frameDecoder = null
+            latestVideoFrame = null
             gifDrawable?.callback = null
             gifDrawable = null
         }
@@ -203,6 +208,9 @@ class SmartSplitWallpaperService : WallpaperService() {
             handler.removeCallbacks(drawRunnable)
             mediaPlayer?.release()
             mediaPlayer = null
+            frameDecoder?.stop()
+            frameDecoder = null
+            latestVideoFrame = null
             gifDrawable?.callback = null
             gifDrawable = null
             try {
@@ -256,6 +264,9 @@ class SmartSplitWallpaperService : WallpaperService() {
         private fun setupImage() {
             mediaPlayer?.release()
             mediaPlayer = null
+            frameDecoder?.stop()
+            frameDecoder = null
+            latestVideoFrame = null
             gifDrawable?.callback = null
             gifDrawable = null
             videoFrames = emptyList()
@@ -330,84 +341,44 @@ class SmartSplitWallpaperService : WallpaperService() {
         }
 
         /**
-         * Plays the pre-cropped file matching THIS engine's screen. Because each file is already
-         * the right shape, a plain MediaPlayer drawing straight to the surface gives smooth,
-         * full-framerate, correctly-split video - the whole point of the pre-split approach.
+         * Plays the pre-cropped file for THIS screen by decoding it frame-by-frame with MediaCodec
+         * and drawing each frame to the wallpaper Canvas. This is the path that actually works on
+         * the Thor: MediaPlayer cannot render to a wallpaper surface here (fails with EINVAL), but
+         * Canvas bitmap drawing works. Because the files are already cropped per screen, decode is
+         * the only per-frame cost, so this runs far smoother than the old sampled slideshow.
          */
         private fun setupVideoPreSplit(holder: SurfaceHolder, topPath: String, bottomPath: String) {
-            videoFrames = emptyList()
             readyBitmap = null
+            videoFrames = emptyList()
             gifDrawable?.callback = null
             gifDrawable = null
+            mediaPlayer?.release()
+            mediaPlayer = null
+            frameDecoder?.stop()
+            frameDecoder = null
+            latestVideoFrame = null
 
-            // Which cropped file belongs to this engine's screen? The top screen is the default
-            // display (order 0); anything else is the bottom.
             val isTop = (myLogicalScreen?.order ?: 0) == 0
             val path = if (isTop) topPath else bottomPath
-            val myGeneration = ++contentGeneration
-
-            // Inspect the file before trusting it. what=-38 on every attempt points at the file
-            // itself, so log what we can actually observe about it: size + whether the platform
-            // can read its metadata back (a proxy for "is this a valid playable MP4").
             val f = java.io.File(path)
-            val sizeKb = if (f.exists()) f.length() / 1024 else -1
-            val probe = try {
-                android.media.MediaMetadataRetriever().use { r ->
-                    r.setDataSource(path)
-                    val w = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
-                    val h = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
-                    val dur = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
-                    val hasVideo = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO)
-                    "probe ok: ${w}x$h dur=${dur}ms hasVideo=$hasVideo"
-                }
-            } catch (t: Throwable) {
-                "probe FAILED: ${t.javaClass.simpleName}: ${t.message}"
-            }
-            DebugLog.d("setupVideoPreSplit: gen=$myGeneration screen id=${myLogicalScreen?.displayId} isTop=$isTop size=${sizeKb}KB $probe -> $path")
+            val myGeneration = ++contentGeneration
+            DebugLog.d("setupVideoPreSplit(decode): gen=$myGeneration screen id=${myLogicalScreen?.displayId} isTop=$isTop size=${if (f.exists()) f.length()/1024 else -1}KB -> $path")
 
-            if (!holder.surface.isValid) {
-                DebugLog.w("setupVideoPreSplit: surface not valid yet, skipping (gen=$myGeneration)")
+            if (!f.exists() || f.length() == 0L) {
+                DebugLog.w("setupVideoPreSplit(decode): file missing/empty")
+                drawFrame()
                 return
             }
 
-            try {
-                mediaPlayer?.release()
-                mediaPlayer = null
-                val mp = MediaPlayer()
-                // Use a FileInputStream FD rather than a path string - more reliable for
-                // app-private files and lets us fail loudly if the file can't even be opened.
-                val fis = java.io.FileInputStream(f)
-                mp.setDataSource(fis.fd)
-                fis.close()
-                mp.setSurface(holder.surface)
-                mp.isLooping = true
-                mp.setVolume(0f, 0f)
-                mp.setOnPreparedListener { player ->
-                    if (myGeneration != contentGeneration || currentHolder !== holder) {
-                        DebugLog.d("setupVideoPreSplit: gen=$myGeneration superseded before prepared; releasing")
-                        runCatching { player.release() }
-                        return@setOnPreparedListener
-                    }
-                    DebugLog.d("setupVideoPreSplit: gen=$myGeneration PREPARED ok, starting playback")
-                    val epoch = Prefs.getOrCreateEpoch(applicationContext)
-                    val elapsed = SystemClock.elapsedRealtime() - epoch
-                    val duration = player.duration.takeIf { d -> d > 0 } ?: 1
-                    runCatching {
-                        player.seekTo((elapsed % duration).toInt())
-                        if (shouldPlay()) player.start()
-                    }.onFailure { DebugLog.e("setupVideoPreSplit: start failed (gen=$myGeneration)", it) }
-                }
-                mp.setOnErrorListener { _, what, extra ->
-                    DebugLog.e("setupVideoPreSplit: MediaPlayer error what=$what extra=$extra path=$path gen=$myGeneration")
-                    true // we handled it; prevents the player from firing further callbacks
-                }
-                mp.prepareAsync()
-                mediaPlayer = mp
-            } catch (t: Throwable) {
-                DebugLog.e("setupVideoPreSplit: failed to play $path", t)
-                mediaPlayer = null
-                drawFrame() // fall back to a diagnostic rather than a blank screen
+            val fps = 30
+            val decoder = VideoFrameDecoder(f, fps) { bmp ->
+                // Called on the decoder's thread. Stash the frame and ask the main thread to draw.
+                if (myGeneration != contentGeneration) return@VideoFrameDecoder
+                latestVideoFrame = bmp
+                handler.post { if (myGeneration == contentGeneration) drawFrame() }
             }
+            frameDecoder = decoder
+            decoder.start()
         }
 
         /** Smooth path: hand the file straight to MediaPlayer, which draws directly to the surface. */
@@ -468,6 +439,9 @@ class SmartSplitWallpaperService : WallpaperService() {
         private fun setupVideoSplit() {
             mediaPlayer?.release()
             mediaPlayer = null
+            frameDecoder?.stop()
+            frameDecoder = null
+            latestVideoFrame = null
             gifDrawable?.callback = null
             gifDrawable = null
             readyBitmap = null
@@ -560,6 +534,9 @@ class SmartSplitWallpaperService : WallpaperService() {
         private fun setupGif() {
             mediaPlayer?.release()
             mediaPlayer = null
+            frameDecoder?.stop()
+            frameDecoder = null
+            latestVideoFrame = null
             videoFrames = emptyList()
             readyBitmap = null
             gifDrawable?.callback = null
@@ -617,9 +594,10 @@ class SmartSplitWallpaperService : WallpaperService() {
                                 }
                             }
                             WallMode.VIDEO -> {
-                                val frame = currentVideoFrame()
+                                val decoded = latestVideoFrame
+                                val frame = decoded ?: currentVideoFrame()
                                 when {
-                                    frame != null -> {
+                                    frame != null && !frame.isRecycled -> {
                                         c.drawColor(Color.BLACK)
                                         c.drawBitmap(frame, fitMatrix(frame, w, h), Paint(Paint.FILTER_BITMAP_FLAG))
                                     }
