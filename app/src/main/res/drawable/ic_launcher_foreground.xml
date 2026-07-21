@@ -1,27 +1,63 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  App icon foreground: a stylized AYN Thor (landscape clamshell) with a hammer + lightning bolt
+  glowing on its top screen - says "wallpapers, on the Thor" at a glance. Everything important is
+  kept inside the adaptive-icon safe zone (roughly the center 66x66 of this 108x108 canvas) because
+  launchers mask off the outer ~18% on every side to whatever shape they use (circle/squircle/etc).
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Lightning bolt, sitting behind/around the hammer -->
+    <!-- Device body (rounded landscape clamshell) -->
+    <path
+        android:fillColor="#3A414D"
+        android:pathData="M26,28 h56 a6,6 0 0 1 6,6 v40 a6,6 0 0 1 -6,6 h-56 a6,6 0 0 1 -6,-6 v-40 a6,6 0 0 1 6,-6 Z" />
+
+    <!-- Top screen (wide) with a subtle blue-black glow -->
+    <path
+        android:fillColor="#0E1116"
+        android:pathData="M30,32 h48 a2,2 0 0 1 2,2 v20 a2,2 0 0 1 -2,2 h-48 a2,2 0 0 1 -2,-2 v-20 a2,2 0 0 1 2,-2 Z" />
+
+    <!-- Lightning bolt behind the hammer, on-screen -->
     <path
         android:fillColor="#FFCC33"
-        android:pathData="M74,10 L48,54 L62,54 L38,100 L88,46 L68,46 Z" />
-
-    <!-- Hammer handle -->
-    <path
-        android:fillColor="#4A2E8A"
-        android:pathData="M45,50 L63,50 L63,94 L45,94 Z" />
+        android:pathData="M62,34 L50,48 L57,48 L48,60 L68,44 L60,44 Z" />
 
     <!-- Hammer head -->
     <path
-        android:fillColor="#7C4DFF"
-        android:pathData="M24,24 L84,24 L84,52 L24,52 Z" />
-
-    <!-- Hammer head highlight, top edge -->
+        android:fillColor="#F0574F"
+        android:pathData="M36,37 h16 v6 h-16 Z" />
+    <!-- Hammer head highlight -->
     <path
-        android:fillColor="#B39DFF"
-        android:pathData="M24,24 L84,24 L84,31 L24,31 Z" />
+        android:fillColor="#FF8B85"
+        android:pathData="M36,37 h16 v2 h-16 Z" />
+    <!-- Hammer handle -->
+    <path
+        android:fillColor="#C97A3A"
+        android:pathData="M42,43 h4 v11 h-4 Z" />
+
+    <!-- Hinge line -->
+    <path android:fillColor="#20242C" android:pathData="M34,57 h40 v2 h-40 Z" />
+
+    <!-- Bottom screen (narrower, centered) -->
+    <path
+        android:fillColor="#0E1116"
+        android:pathData="M40,61 h28 a2,2 0 0 1 2,2 v9 a2,2 0 0 1 -2,2 h-28 a2,2 0 0 1 -2,-2 v-9 a2,2 0 0 1 2,-2 Z" />
+
+    <!-- Left stick -->
+    <path android:fillColor="#5C6470" android:pathData="M28,62 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0 Z" />
+    <!-- Right stick -->
+    <path android:fillColor="#5C6470" android:pathData="M72,68 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0 Z" />
+
+    <!-- D-pad (left, small plus) -->
+    <path android:fillColor="#5C6470" android:pathData="M29,70 h6 v2 h-6 Z M31,68 h2 v6 h-2 Z" />
+
+    <!-- Face buttons (right, small diamond) -->
+    <path android:fillColor="#FFCC33" android:pathData="M74,60 a1.6,1.6 0 1,0 3.2,0 a1.6,1.6 0 1,0 -3.2,0 Z" />
+    <path android:fillColor="#5AAE6B" android:pathData="M70,63 a1.6,1.6 0 1,0 3.2,0 a1.6,1.6 0 1,0 -3.2,0 Z" />
+    <path android:fillColor="#4F9BD8" android:pathData="M78,63 a1.6,1.6 0 1,0 3.2,0 a1.6,1.6 0 1,0 -3.2,0 Z" />
+    <path android:fillColor="#F0574F" android:pathData="M74,66 a1.6,1.6 0 1,0 3.2,0 a1.6,1.6 0 1,0 -3.2,0 Z" />
 </vector>

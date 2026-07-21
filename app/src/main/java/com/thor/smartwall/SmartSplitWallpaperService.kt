@@ -54,6 +54,13 @@ class SmartSplitWallpaperService : WallpaperService() {
         private var gifDrawable: AnimatedImageDrawable? = null
         private var videoFrames: List<Bitmap> = emptyList()
 
+        // Guards against the rapid engine-recreate races seen in field debug reports: each call to
+        // setupVideoSplit bumps this, and a background sampling thread only publishes its result if
+        // its captured generation still matches. Stale threads (from a torn-down engine) no-op.
+        @Volatile private var contentGeneration = 0
+        private var samplingThread: Thread? = null
+        @Volatile private var videoPreparing = false
+
         // Lets an AnimatedImageDrawable schedule its own frame timing onto our Handler and
         // ask us to redraw when a new frame is ready - the standard way to drive a Drawable's
         // animation when it isn't hosted inside a View.
@@ -165,6 +172,7 @@ class SmartSplitWallpaperService : WallpaperService() {
 
         override fun onSurfaceDestroyed(holder: SurfaceHolder) {
             super.onSurfaceDestroyed(holder)
+            contentGeneration++ // orphan any in-flight sampling thread
             handler.removeCallbacks(drawRunnable)
             mediaPlayer?.release()
             mediaPlayer = null
@@ -174,6 +182,7 @@ class SmartSplitWallpaperService : WallpaperService() {
 
         override fun onDestroy() {
             super.onDestroy()
+            contentGeneration++ // orphan any in-flight sampling thread
             handler.removeCallbacks(drawRunnable)
             mediaPlayer?.release()
             mediaPlayer = null
@@ -341,14 +350,32 @@ class SmartSplitWallpaperService : WallpaperService() {
             videoFrames = emptyList()
 
             val ctx = applicationContext
-            val screen = myLogicalScreen ?: return
-            val uriStr = ctx.videoUri ?: run { drawFrame(); return }
+            val screen = myLogicalScreen
+            if (screen == null) {
+                DebugLog.w("setupVideoSplit: no screen resolved; drawing diagnostic")
+                drawFrame()
+                return
+            }
+            val uriStr = ctx.videoUri
+            if (uriStr == null) {
+                DebugLog.w("setupVideoSplit: no video URI set")
+                drawFrame()
+                return
+            }
             val screensSnapshot = allScreensLogical
             val orientation = if (ctx.orientationVertical) StackOrientation.VERTICAL else StackOrientation.HORIZONTAL
             val gap = ctx.gapFraction
             val smoothness = ctx.videoSmoothness
 
-            Thread {
+            // Invalidate any in-flight sampling job from a previous (possibly torn-down) engine.
+            val myGeneration = ++contentGeneration
+            videoPreparing = true
+            drawFrame() // show a "preparing" state right away so the screen is never blank while sampling
+            DebugLog.d("setupVideoSplit: starting sample gen=$myGeneration frames=${smoothness.frameCount} screen=${screen.widthPx}x${screen.heightPx} id=${screen.displayId}")
+
+            val worker = Thread {
+                var attempted = 0
+                var succeeded = 0
                 val sampled = try {
                     val retriever = android.media.MediaMetadataRetriever()
                     retriever.setDataSource(ctx, uriStr.toUri())
@@ -357,6 +384,8 @@ class SmartSplitWallpaperService : WallpaperService() {
                     val frameCount = smoothness.frameCount
                     val frames = mutableListOf<Bitmap>()
                     for (i in 0 until frameCount) {
+                        if (myGeneration != contentGeneration) break // superseded - stop wasting work
+                        attempted++
                         val timeUs = durationMs * 1000L * i.toLong() / frameCount.toLong()
                         val raw = try {
                             retriever.getScaledFrameAtTime(
@@ -369,20 +398,31 @@ class SmartSplitWallpaperService : WallpaperService() {
                         val cropped = raw?.let {
                             SplitEngine.computeCrops(it, screensSnapshot, orientation, gap)[screen.displayId]
                         }
-                        if (cropped != null) frames.add(cropped)
+                        if (cropped != null) { frames.add(cropped); succeeded++ }
                     }
                     retriever.release()
                     frames
                 } catch (t: Throwable) {
-                    android.util.Log.e("ThorSmartWall", "Failed to sample video frames from $uriStr", t)
+                    DebugLog.e("setupVideoSplit: sampling failed (gen=$myGeneration)", t)
                     emptyList()
                 }
                 handler.post {
+                    if (myGeneration != contentGeneration) {
+                        DebugLog.d("setupVideoSplit: gen=$myGeneration superseded, discarding ${sampled.size} frames")
+                        return@post
+                    }
+                    videoPreparing = false
                     videoFrames = sampled
+                    DebugLog.d("setupVideoSplit: gen=$myGeneration done - $succeeded/$attempted frames usable")
+                    if (sampled.isEmpty()) {
+                        DebugLog.w("setupVideoSplit: NO usable frames - drawing diagnostic. Codec may not support frame extraction for this file.")
+                    }
                     drawFrame()
                     updatePlaybackState()
                 }
-            }.start()
+            }
+            samplingThread = worker
+            worker.start()
         }
 
         /**
@@ -454,11 +494,13 @@ class SmartSplitWallpaperService : WallpaperService() {
                             }
                             WallMode.VIDEO -> {
                                 val frame = currentVideoFrame()
-                                if (frame != null) {
-                                    c.drawColor(Color.BLACK)
-                                    c.drawBitmap(frame, fitMatrix(frame, w, h), Paint(Paint.FILTER_BITMAP_FLAG))
-                                } else {
-                                    drawNoContentMessage(c, w, h)
+                                when {
+                                    frame != null -> {
+                                        c.drawColor(Color.BLACK)
+                                        c.drawBitmap(frame, fitMatrix(frame, w, h), Paint(Paint.FILTER_BITMAP_FLAG))
+                                    }
+                                    videoPreparing -> drawCenteredMessage(c, w, h, "Preparing video…", "#101418")
+                                    else -> drawNoContentMessage(c, w, h)
                                 }
                             }
                             else -> {
@@ -545,8 +587,20 @@ class SmartSplitWallpaperService : WallpaperService() {
                 isAntiAlias = true
                 textAlign = Paint.Align.CENTER
             }
-            c.drawText("ThorPaper: no image loaded", w / 2f, h / 2f, textPaint)
-            c.drawText("Reopen the app and pick media again", w / 2f, h / 2f + 50f, textPaint)
+            c.drawText("ThorPaper: content couldn't load", w / 2f, h / 2f, textPaint)
+            c.drawText("Open ThorPaper and pick media again", w / 2f, h / 2f + 50f, textPaint)
+        }
+
+        /** Neutral centered status text (e.g. the brief "Preparing video…" state during sampling). */
+        private fun drawCenteredMessage(c: Canvas, w: Int, h: Int, text: String, bgHex: String) {
+            c.drawColor(Color.parseColor(bgHex))
+            val textPaint = Paint().apply {
+                color = Color.WHITE
+                textSize = 34f
+                isAntiAlias = true
+                textAlign = Paint.Align.CENTER
+            }
+            c.drawText(text, w / 2f, h / 2f, textPaint)
         }
 
         /** Straight fill: bitmap already matches the surface size (this is the STATIC path). */
