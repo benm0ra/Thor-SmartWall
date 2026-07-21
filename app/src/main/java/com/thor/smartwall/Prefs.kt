@@ -13,6 +13,7 @@ object Prefs {
     private const val KEY_IMAGE_URI_2 = "image_uri_secondary" // used only in independent mode
     private const val KEY_VIDEO_URI = "video_uri"
     private const val KEY_GIF_URI = "gif_uri"
+    private const val KEY_GIPHY_KEY = "giphy_api_key"
     private const val KEY_MODE = "mode"
     private const val KEY_GAP = "gap_fraction"
     private const val KEY_SWAP = "swap_order"
@@ -38,6 +39,10 @@ object Prefs {
     var Context.gifUri: String?
         get() = sp(this).getString(KEY_GIF_URI, null)
         set(v) = sp(this).edit().putString(KEY_GIF_URI, v).apply()
+
+    var Context.giphyApiKey: String?
+        get() = sp(this).getString(KEY_GIPHY_KEY, null)
+        set(v) = sp(this).edit().putString(KEY_GIPHY_KEY, v).apply()
 
     var Context.mode: WallMode
         get() = WallMode.valueOf(sp(this).getString(KEY_MODE, WallMode.KEN_BURNS.name)!!)

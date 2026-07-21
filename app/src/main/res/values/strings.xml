@@ -1,11 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Thor Smart Split</string>
+    <string name="app_name">ThorPaper</string>
     <string name="tagline">One image or video, correctly split across both Thor screens.</string>
     <string name="wallpaper_description">Splits one image continuously across the Thor\'s two screens, with an optional slow Ken Burns pan/zoom.</string>
     <string name="pick_image">Choose Image</string>
     <string name="pick_video">Choose Video (loops per-screen)</string>
     <string name="pick_gif">Choose Animated GIF (loops per-screen)</string>
+    <string name="search_gifs_online">Search GIFs Online (GIPHY)</string>
+    <string name="gif_search_title">Search GIFs</string>
+    <string name="powered_by_giphy">Powered by GIPHY</string>
+    <string name="search_gifs_hint">Search GIPHY…</string>
+    <string name="searching">Searching…</string>
+    <string name="no_results">No results</string>
+    <string name="search_failed">Search failed: %1$s</string>
+    <string name="downloading">Downloading…</string>
+    <string name="gif_ready_toast">GIF set - ready to apply as your live wallpaper</string>
+    <string name="download_failed">Download failed</string>
+    <string name="need_giphy_key_title">Free GIPHY API key needed</string>
+    <string name="need_giphy_key_message">GIF search uses GIPHY\'s public API, which needs your own free key (Tenor/Google stopped issuing new API keys in Jan 2026, so GIPHY is the option that still works for a new app). Tap \"Get a key\" to sign up on their site, then paste it below.</string>
+    <string name="paste_giphy_key_hint">Paste your GIPHY API key</string>
+    <string name="save">Save</string>
+    <string name="key_saved">Key saved</string>
+    <string name="open_signup_page">Get a key</string>
     <string name="pick_bottom_image">Choose Bottom-Screen Image</string>
     <string name="independent_mode">Independent mode (different image per screen)</string>
     <string name="stacked_vertically">Screens stacked vertically (Thor default)</string>
@@ -17,14 +33,17 @@
     <string name="mode_gif">Animated GIF</string>
     <string name="apply_live_wallpaper">Set as Live Wallpaper</string>
     <string name="export_split_images">Export Split Images (PNG)</string>
+    <string name="show_screen_info">Show Screen Info (diagnostics)</string>
+    <string name="screen_diagnostics_title">What Android sees</string>
     <string name="export_hint">If the Thor\'s launcher doesn\'t offer the second screen a live wallpaper of its own, use Export, then assign each PNG manually through the system wallpaper picker for that screen.</string>
     <string name="preview_top_desc">Top screen preview</string>
     <string name="preview_bottom_desc">Bottom screen preview</string>
+    <string name="preview_scale_note">Shown at the Thor\'s real 1080×1920 / 1080×1240 screen proportions</string>
     <string name="could_not_load_image">Could not load that image</string>
     <string name="pick_image_first">Pick an image first</string>
     <string name="export_failed">Export failed</string>
     <string name="exported_to">Saved to %1$s</string>
     <string name="video_loaded">Video loaded</string>
     <string name="gif_loaded">GIF loaded</string>
-    <string name="open_wallpaper_picker_manually">Open Settings ▸ Wallpaper and pick Thor Smart Split manually</string>
+    <string name="open_wallpaper_picker_manually">Open Settings ▸ Wallpaper and pick ThorPaper manually</string>
 </resources>

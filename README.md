@@ -1,4 +1,4 @@
-# Thor Smart Split — a Wallpaper-Engine-style live wallpaper for the AYN Thor
+# ThorPaper — a Wallpaper-Engine-style live wallpaper for the AYN Thor
 
 A live wallpaper app that takes one image (or video) and splits it correctly
 across the AYN Thor's two OLED panels (1080×1920 top / 1080×1240 bottom),
@@ -25,8 +25,27 @@ GitHub repo (even just by dragging the unzipped folder into GitHub's web
 upload page — no `git` command line needed) and the **Actions** tab will
 build `app-debug.apk` for you automatically and let you download it.
 
+## If splitting still doesn't look right
+Tap **Show Screen Info (diagnostics)** in the app with the Thor open. It
+lists exactly what Android's `DisplayManager` sees system-wide right now.
+This settles the one real unknown flagged since the start of this project:
+whether the Thor's launcher actually hands the wallpaper service two
+separate displays (which is what per-Engine splitting depends on), or
+whether Android only ever sees one combined panel. If it reports one
+display, the per-screen split has to happen at the OS/launcher level, not in
+this app — use **Export Split Images** and assign each PNG manually through
+whatever per-screen picker the Thor's Settings app offers instead.
+
+## Searching for GIFs online
+**Search GIFs Online** uses GIPHY's public API. You'll need your own free
+API key (developers.giphy.com → Create an App → select "API"; the free beta
+key is rate-limited to 100 calls/hour, plenty for personal use) — the app
+prompts for it the first time and links straight to the signup page. Note:
+Tenor (Google's GIF API) stopped issuing new developer keys as of January
+2026, which is why this uses GIPHY instead.
+
 ## How to use it once installed
-1. Open **Thor Smart Split**, pick an image.
+1. Open **ThorPaper**, pick an image.
 2. Drag the **hinge gap** slider until the art lines up across the hinge in
    the live preview.
 3. Pick **Slow pan/zoom**, **Static**, or **Looping video**.

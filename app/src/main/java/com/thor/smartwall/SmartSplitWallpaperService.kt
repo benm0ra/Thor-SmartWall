@@ -354,7 +354,7 @@ class SmartSplitWallpaperService : WallpaperService() {
                 isAntiAlias = true
                 textAlign = Paint.Align.CENTER
             }
-            c.drawText("Thor Smart Split: no image loaded", c.width / 2f, c.height / 2f, textPaint)
+            c.drawText("ThorPaper: no image loaded", c.width / 2f, c.height / 2f, textPaint)
             c.drawText("Reopen the app and pick media again", c.width / 2f, c.height / 2f + 50f, textPaint)
         }
 

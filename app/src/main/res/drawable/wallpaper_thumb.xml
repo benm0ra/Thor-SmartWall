@@ -5,10 +5,24 @@
     android:viewportWidth="192"
     android:viewportHeight="192">
     <path android:fillColor="#111318" android:pathData="M0,0h192v192h-192z" />
+
+    <!-- Lightning bolt -->
+    <path
+        android:fillColor="#FFCC33"
+        android:pathData="M132,18 L86,96 L110,96 L68,178 L156,82 L120,82 Z" />
+
+    <!-- Hammer handle -->
+    <path
+        android:fillColor="#4A2E8A"
+        android:pathData="M80,89 L112,89 L112,167 L80,167 Z" />
+
+    <!-- Hammer head -->
     <path
         android:fillColor="#7C4DFF"
-        android:pathData="M56,24 h80 a8,8 0 0 1 8,8 v64 a8,8 0 0 1 -8,8 h-80 a8,8 0 0 1 -8,-8 v-64 a8,8 0 0 1 8,-8 z" />
+        android:pathData="M43,43 L149,43 L149,92 L43,92 Z" />
+
+    <!-- Hammer head highlight -->
     <path
         android:fillColor="#B39DFF"
-        android:pathData="M64,112 h64 a8,8 0 0 1 8,8 v32 a8,8 0 0 1 -8,8 h-64 a8,8 0 0 1 -8,-8 v-32 a8,8 0 0 1 8,-8 z" />
+        android:pathData="M43,43 L149,43 L149,55 L43,55 Z" />
 </vector>
