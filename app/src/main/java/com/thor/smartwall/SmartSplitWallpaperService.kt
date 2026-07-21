@@ -62,6 +62,8 @@ class SmartSplitWallpaperService : WallpaperService() {
         @Volatile private var contentGeneration = 0
         private var samplingThread: Thread? = null
         @Volatile private var videoPreparing = false
+        private var currentHolder: SurfaceHolder? = null
+        private var contentPreparedForSurface = false
 
         // Lets an AnimatedImageDrawable schedule its own frame timing onto our Handler and
         // ask us to redraw when a new frame is ready - the standard way to drive a Drawable's
@@ -146,15 +148,26 @@ class SmartSplitWallpaperService : WallpaperService() {
 
         override fun onSurfaceCreated(holder: SurfaceHolder) {
             super.onSurfaceCreated(holder)
+            currentHolder = holder
             resolveScreenGeometry()
             DebugLog.d("Engine.onSurfaceCreated: mode=${applicationContext.mode}, screen=${myLogicalScreen?.let { "${it.widthPx}x${it.heightPx} id=${it.displayId}" } ?: "null"}, totalScreens=${allScreensLogical.size}")
+            contentPreparedForSurface = false
             prepareContentForCurrentMode(holder)
+            contentPreparedForSurface = true
         }
 
         override fun onSurfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
             super.onSurfaceChanged(holder, format, width, height)
-            resolveScreenGeometry()
-            prepareContentForCurrentMode(holder)
+            currentHolder = holder
+            // onSurfaceChanged fires right after onSurfaceCreated with the same surface. Re-running
+            // full content setup here would spin up a SECOND MediaPlayer that collides with the
+            // first mid-preparation (the observed what=-38 error). Only re-prepare if we haven't
+            // already prepared for this surface (e.g. a genuine later size change).
+            if (!contentPreparedForSurface) {
+                resolveScreenGeometry()
+                prepareContentForCurrentMode(holder)
+                contentPreparedForSurface = true
+            }
         }
 
         override fun onVisibilityChanged(isVisible: Boolean) {
@@ -175,6 +188,8 @@ class SmartSplitWallpaperService : WallpaperService() {
         override fun onSurfaceDestroyed(holder: SurfaceHolder) {
             super.onSurfaceDestroyed(holder)
             contentGeneration++ // orphan any in-flight sampling thread
+            contentPreparedForSurface = false
+            currentHolder = null
             handler.removeCallbacks(drawRunnable)
             mediaPlayer?.release()
             mediaPlayer = null
@@ -329,25 +344,41 @@ class SmartSplitWallpaperService : WallpaperService() {
             // display (order 0); anything else is the bottom.
             val isTop = (myLogicalScreen?.order ?: 0) == 0
             val path = if (isTop) topPath else bottomPath
-            DebugLog.d("setupVideoPreSplit: screen id=${myLogicalScreen?.displayId} isTop=$isTop -> $path")
+            val myGeneration = ++contentGeneration
+            DebugLog.d("setupVideoPreSplit: gen=$myGeneration screen id=${myLogicalScreen?.displayId} isTop=$isTop -> $path")
+
+            if (!holder.surface.isValid) {
+                DebugLog.w("setupVideoPreSplit: surface not valid yet, skipping (gen=$myGeneration)")
+                return
+            }
 
             try {
                 mediaPlayer?.release()
+                mediaPlayer = null
                 val mp = MediaPlayer()
                 mp.setDataSource(path)
                 mp.setSurface(holder.surface)
                 mp.isLooping = true
                 mp.setVolume(0f, 0f)
-                mp.setOnPreparedListener {
+                mp.setOnPreparedListener { player ->
+                    // If this engine was torn down or superseded while we were preparing, don't
+                    // touch the player against a dead surface - that's what threw what=-38.
+                    if (myGeneration != contentGeneration || currentHolder !== holder) {
+                        DebugLog.d("setupVideoPreSplit: gen=$myGeneration superseded before prepared; releasing")
+                        runCatching { player.release() }
+                        return@setOnPreparedListener
+                    }
                     val epoch = Prefs.getOrCreateEpoch(applicationContext)
                     val elapsed = SystemClock.elapsedRealtime() - epoch
-                    val duration = it.duration.takeIf { d -> d > 0 } ?: 1
-                    it.seekTo((elapsed % duration).toInt())
-                    if (shouldPlay()) it.start()
+                    val duration = player.duration.takeIf { d -> d > 0 } ?: 1
+                    runCatching {
+                        player.seekTo((elapsed % duration).toInt())
+                        if (shouldPlay()) player.start()
+                    }.onFailure { DebugLog.e("setupVideoPreSplit: start failed (gen=$myGeneration)", it) }
                 }
                 mp.setOnErrorListener { _, what, extra ->
-                    DebugLog.e("setupVideoPreSplit: MediaPlayer error what=$what extra=$extra path=$path")
-                    false
+                    DebugLog.e("setupVideoPreSplit: MediaPlayer error what=$what extra=$extra path=$path gen=$myGeneration")
+                    true // we handled it; prevents the player from firing further callbacks
                 }
                 mp.prepareAsync()
                 mediaPlayer = mp
@@ -366,26 +397,42 @@ class SmartSplitWallpaperService : WallpaperService() {
             gifDrawable = null
             val ctx = applicationContext
             val uriStr = ctx.videoUri ?: return
+            val myGeneration = ++contentGeneration
+            if (!holder.surface.isValid) {
+                DebugLog.w("setupVideoSmooth: surface not valid yet, skipping (gen=$myGeneration)")
+                return
+            }
             try {
                 mediaPlayer?.release()
+                mediaPlayer = null
                 val mp = MediaPlayer()
                 mp.setDataSource(ctx, uriStr.toUri())
                 mp.setSurface(holder.surface)
                 mp.isLooping = true
                 mp.setVolume(0f, 0f)
-                mp.setOnPreparedListener {
+                mp.setOnPreparedListener { player ->
+                    if (myGeneration != contentGeneration || currentHolder !== holder) {
+                        runCatching { player.release() }
+                        return@setOnPreparedListener
+                    }
                     // Align every engine's playback position to the same shared epoch so
                     // top and bottom screens loop in lockstep instead of drifting apart.
                     val epoch = Prefs.getOrCreateEpoch(ctx)
                     val elapsed = SystemClock.elapsedRealtime() - epoch
-                    val duration = it.duration.takeIf { d -> d > 0 } ?: 1
-                    val seekTo = (elapsed % duration).toInt()
-                    it.seekTo(seekTo)
-                    if (shouldPlay()) it.start()
+                    val duration = player.duration.takeIf { d -> d > 0 } ?: 1
+                    runCatching {
+                        player.seekTo((elapsed % duration).toInt())
+                        if (shouldPlay()) player.start()
+                    }
+                }
+                mp.setOnErrorListener { _, what, extra ->
+                    DebugLog.e("setupVideoSmooth: MediaPlayer error what=$what extra=$extra gen=$myGeneration")
+                    true
                 }
                 mp.prepareAsync()
                 mediaPlayer = mp
             } catch (t: Throwable) {
+                DebugLog.e("setupVideoSmooth: failed", t)
                 mediaPlayer = null
             }
         }
