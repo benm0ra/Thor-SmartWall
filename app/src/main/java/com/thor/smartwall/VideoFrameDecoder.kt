@@ -1,6 +1,10 @@
 package com.thor.smartwall
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageFormat
+import android.graphics.Rect
+import android.graphics.YuvImage
 import android.media.Image
 import android.media.ImageReader
 import android.media.MediaCodec
@@ -8,24 +12,22 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.os.Handler
 import android.os.HandlerThread
+import java.io.ByteArrayOutputStream
 import java.io.File
-import java.nio.ByteBuffer
 
 /**
  * Decodes a video file into a continuous stream of Bitmaps using MediaCodec + ImageReader, looping
- * forever, and hands each decoded frame to a callback so it can be drawn to a Canvas.
+ * forever, handing each decoded frame to [onFrame] to be drawn to a Canvas.
  *
  * Why this exists: on the AYN Thor, MediaPlayer cannot render video onto a WallpaperService
- * surface at all (it fails with EINVAL the moment playback starts drawing - confirmed in field
- * debug reports, in both "smooth" and "pre-split" MediaPlayer paths). But drawing Bitmaps to the
- * wallpaper Canvas works fine (that's how every other mode renders). So instead of asking
- * MediaPlayer to draw, we decode frames ourselves and draw them. Paired with the pre-split files
- * (already cropped per screen), the only per-frame cost here is decode, letting this run far
- * smoother than the old 16-frame sampled slideshow.
+ * surface (fails with EINVAL as soon as it draws - confirmed in field logs). But drawing Bitmaps
+ * to the wallpaper Canvas works. So we decode frames ourselves and draw them.
  *
- * This is deliberately simple and defensive: software-friendly YUV->RGB via ImageReader in
- * RGBA_8888 request, one decoder per instance, its own thread, and a hard stop() that releases
- * everything. Heavy logging via DebugLog so field failures are diagnosable.
+ * Format note (the thing that made the first attempt produce no frames): hardware AVC decoders
+ * output YUV, not RGBA. Requesting an RGBA_8888 ImageReader silently yielded zero frames. This
+ * version requests YUV_420_888 (which hardware decoders DO feed) and converts each frame to a
+ * Bitmap via NV21 -> YuvImage -> JPEG -> Bitmap. That conversion isn't the fastest possible, but
+ * it's dependency-free and works on essentially any device; correctness first, optimize later.
  */
 class VideoFrameDecoder(
     private val file: File,
@@ -39,6 +41,7 @@ class VideoFrameDecoder(
     private var extractor: MediaExtractor? = null
     private var codec: MediaCodec? = null
     private var imageReader: ImageReader? = null
+    @Volatile private var framesEmitted = 0
 
     fun start() {
         if (running) return
@@ -89,103 +92,112 @@ class VideoFrameDecoder(
         val height = format.getInteger(MediaFormat.KEY_HEIGHT)
         val mime = format.getString(MediaFormat.KEY_MIME)!!
 
-        // ImageReader in RGBA_8888 gives us frames we can copy straight into a Bitmap.
-        val reader = ImageReader.newInstance(width, height, android.graphics.PixelFormat.RGBA_8888, 3)
+        val reader = ImageReader.newInstance(width, height, ImageFormat.YUV_420_888, 3)
         imageReader = reader
-
-        val dec = MediaCodec.createDecoderByType(mime)
-        codec = dec
-        // Decode onto the ImageReader surface. Request flexible output so the codec renders into it.
-        dec.configure(format, reader.surface, null, 0)
-        dec.start()
-        DebugLog.d("VideoFrameDecoder: started ${file.name} ${width}x$height mime=$mime fps=$targetFps")
-
-        val bufferInfo = MediaCodec.BufferInfo()
-        val frameIntervalMs = (1000L / targetFps.coerceIn(1, 60))
-        var inputDone = false
-
-        val reusableBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-
         reader.setOnImageAvailableListener({ r ->
             val img = try { r.acquireLatestImage() } catch (_: Throwable) { null }
             if (img != null) {
                 try {
-                    copyImageToBitmap(img, reusableBitmap, width, height)
-                    if (running) onFrame(reusableBitmap)
+                    val bmp = yuvImageToBitmap(img, width, height)
+                    if (bmp != null && running) {
+                        framesEmitted++
+                        if (framesEmitted == 1) DebugLog.d("VideoFrameDecoder: first frame emitted for ${file.name}")
+                        onFrame(bmp)
+                    }
                 } catch (t: Throwable) {
-                    DebugLog.e("VideoFrameDecoder: frame copy failed", t)
+                    DebugLog.e("VideoFrameDecoder: frame convert failed", t)
                 } finally {
                     img.close()
                 }
             }
         }, handler)
 
+        val dec = MediaCodec.createDecoderByType(mime)
+        codec = dec
+        dec.configure(format, reader.surface, null, 0)
+        dec.start()
+        DebugLog.d("VideoFrameDecoder: started ${file.name} ${width}x$height mime=$mime fps=$targetFps")
+
+        val bufferInfo = MediaCodec.BufferInfo()
+        val frameIntervalMs = (1000L / targetFps.coerceIn(1, 60))
+
         while (running) {
-            // Feed input.
-            if (!inputDone) {
-                val inIndex = dec.dequeueInputBuffer(10_000)
-                if (inIndex >= 0) {
-                    val inBuf = dec.getInputBuffer(inIndex)!!
-                    val sampleSize = ex.readSampleData(inBuf, 0)
-                    if (sampleSize < 0) {
-                        // End of stream: loop back to the start for a seamless repeat.
-                        ex.seekTo(0, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
-                        val retry = ex.readSampleData(inBuf, 0)
-                        if (retry < 0) {
-                            dec.queueInputBuffer(inIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                            inputDone = true
-                        } else {
-                            dec.queueInputBuffer(inIndex, 0, retry, ex.sampleTime, 0)
-                            ex.advance()
-                        }
+            val inIndex = dec.dequeueInputBuffer(10_000)
+            if (inIndex >= 0) {
+                val inBuf = dec.getInputBuffer(inIndex)!!
+                val sampleSize = ex.readSampleData(inBuf, 0)
+                if (sampleSize < 0) {
+                    ex.seekTo(0, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+                    val retry = ex.readSampleData(inBuf, 0)
+                    if (retry < 0) {
+                        dec.queueInputBuffer(inIndex, 0, 0, 0, 0)
                     } else {
-                        dec.queueInputBuffer(inIndex, 0, sampleSize, ex.sampleTime, 0)
+                        dec.queueInputBuffer(inIndex, 0, retry, ex.sampleTime, 0)
                         ex.advance()
                     }
+                } else {
+                    dec.queueInputBuffer(inIndex, 0, sampleSize, ex.sampleTime, 0)
+                    ex.advance()
                 }
             }
 
-            // Drain output (rendered to the ImageReader surface).
             val outIndex = dec.dequeueOutputBuffer(bufferInfo, 10_000)
             if (outIndex >= 0) {
-                val render = bufferInfo.size > 0
-                dec.releaseOutputBuffer(outIndex, render)
-                if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
-                    // Reached EOS on output: restart the whole loop for continuous playback.
-                    runCatching { dec.flush() }
-                    ex.seekTo(0, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
-                    inputDone = false
-                }
-                // Pace ourselves roughly to target fps so we don't spin the CPU flat out.
+                dec.releaseOutputBuffer(outIndex, true)
                 try { Thread.sleep(frameIntervalMs) } catch (_: InterruptedException) {}
             }
         }
-
-        runCatching { reusableBitmap.recycle() }
     }
 
-    /** Copies a single ImageReader Image (RGBA_8888) into an existing ARGB_8888 Bitmap. */
-    private fun copyImageToBitmap(image: Image, out: Bitmap, width: Int, height: Int) {
-        val plane = image.planes[0]
-        val buffer: ByteBuffer = plane.buffer
-        val pixelStride = plane.pixelStride
-        val rowStride = plane.rowStride
-        val rowPadding = rowStride - pixelStride * width
+    private fun yuvImageToBitmap(image: Image, width: Int, height: Int): Bitmap? {
+        val nv21 = yuv420ToNv21(image, width, height)
+        val yuv = YuvImage(nv21, ImageFormat.NV21, width, height, null)
+        val out = ByteArrayOutputStream()
+        yuv.compressToJpeg(Rect(0, 0, width, height), 85, out)
+        val bytes = out.toByteArray()
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    }
 
-        if (rowPadding == 0) {
-            buffer.rewind()
-            out.copyPixelsFromBuffer(buffer)
+    private fun yuv420ToNv21(image: Image, width: Int, height: Int): ByteArray {
+        val ySize = width * height
+        val nv21 = ByteArray(ySize + ySize / 2)
+
+        val yPlane = image.planes[0]
+        val uPlane = image.planes[1]
+        val vPlane = image.planes[2]
+
+        val yBuffer = yPlane.buffer
+        val yRowStride = yPlane.rowStride
+        var pos = 0
+        if (yRowStride == width) {
+            yBuffer.get(nv21, 0, ySize)
+            pos = ySize
         } else {
-            // Handle stride padding row by row into a padded bitmap, then it still maps 1:1 since
-            // out width matches image width; we build a temporary full-stride bitmap.
-            val padded = Bitmap.createBitmap(
-                width + rowPadding / pixelStride.coerceAtLeast(1), height, Bitmap.Config.ARGB_8888
-            )
-            buffer.rewind()
-            padded.copyPixelsFromBuffer(buffer)
-            val canvas = android.graphics.Canvas(out)
-            canvas.drawBitmap(padded, 0f, 0f, null)
-            padded.recycle()
+            val row = ByteArray(yRowStride)
+            for (r in 0 until height) {
+                yBuffer.position(r * yRowStride)
+                yBuffer.get(row, 0, minOf(yRowStride, row.size))
+                System.arraycopy(row, 0, nv21, pos, width)
+                pos += width
+            }
         }
+
+        val chromaHeight = height / 2
+        val chromaWidth = width / 2
+        val vBuffer = vPlane.buffer
+        val uBuffer = uPlane.buffer
+        val vRowStride = vPlane.rowStride
+        val uRowStride = uPlane.rowStride
+        val vPixStride = vPlane.pixelStride
+        val uPixStride = uPlane.pixelStride
+
+        var offset = ySize
+        for (r in 0 until chromaHeight) {
+            for (c in 0 until chromaWidth) {
+                nv21[offset++] = vBuffer.get(r * vRowStride + c * vPixStride)
+                nv21[offset++] = uBuffer.get(r * uRowStride + c * uPixStride)
+            }
+        }
+        return nv21
     }
 }

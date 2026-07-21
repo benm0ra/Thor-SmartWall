@@ -320,11 +320,14 @@ class SmartSplitWallpaperService : WallpaperService() {
         }
 
         /**
-         * Video playback picks the best available path:
-         * 1. Pre-split files exist (from VideoSplitTranscoder) -> play this screen's own cropped
-         *    file with MediaPlayer. Smooth AND split. The preferred path.
-         * 2. Smooth mode on -> play the original with MediaPlayer (smooth, duplicated).
-         * 3. Otherwise -> frame-sampled slideshow (split, choppy). The fallback.
+         * Video playback. MediaPlayer cannot render to this device's wallpaper surface at all, so
+         * every path decodes frames with MediaCodec and draws them to the Canvas instead.
+         * 1. Pre-split files exist -> decode this screen's own cropped file. Smooth AND split.
+         * 2. Otherwise -> the choppy frame-sampled fallback (still correctly split), which the
+         *    user can upgrade by choosing "Prepare it" when picking the video.
+         *
+         * (The old "Smooth mode = one MediaPlayer, duplicated" path is retired - it never worked
+         * on this hardware. If a video hasn't been pre-split we use the sampled fallback.)
          */
         private fun setupVideo(holder: SurfaceHolder) {
             val ctx = applicationContext
@@ -333,10 +336,10 @@ class SmartSplitWallpaperService : WallpaperService() {
             val haveSplitFiles = topPath != null && bottomPath != null &&
                 java.io.File(topPath).exists() && java.io.File(bottomPath).exists()
 
-            when {
-                haveSplitFiles && !ctx.videoSmoothMode -> setupVideoPreSplit(holder, topPath!!, bottomPath!!)
-                ctx.videoSmoothMode -> setupVideoSmooth(holder)
-                else -> setupVideoSplit()
+            if (haveSplitFiles) {
+                setupVideoPreSplit(holder, topPath!!, bottomPath!!)
+            } else {
+                setupVideoSplit()
             }
         }
 
@@ -575,8 +578,6 @@ class SmartSplitWallpaperService : WallpaperService() {
 
         private fun drawFrame() {
             val ctx = applicationContext
-            if (ctx.mode == WallMode.VIDEO && ctx.videoSmoothMode) return // MediaPlayer draws directly to the surface
-
             val holder = surfaceHolder
             var canvas: Canvas? = null
             try {
