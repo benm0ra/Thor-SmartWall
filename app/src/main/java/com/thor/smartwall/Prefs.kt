@@ -3,7 +3,7 @@ package com.thor.smartwall
 import android.content.Context
 import android.content.SharedPreferences
 
-enum class WallMode { STATIC, KEN_BURNS, VIDEO }
+enum class WallMode { STATIC, KEN_BURNS, VIDEO, GIF }
 
 /** Central config, read by both MainActivity (writer) and the wallpaper Engine (reader). */
 object Prefs {
@@ -12,6 +12,7 @@ object Prefs {
     private const val KEY_IMAGE_URI = "image_uri"
     private const val KEY_IMAGE_URI_2 = "image_uri_secondary" // used only in independent mode
     private const val KEY_VIDEO_URI = "video_uri"
+    private const val KEY_GIF_URI = "gif_uri"
     private const val KEY_MODE = "mode"
     private const val KEY_GAP = "gap_fraction"
     private const val KEY_SWAP = "swap_order"
@@ -33,6 +34,10 @@ object Prefs {
     var Context.videoUri: String?
         get() = sp(this).getString(KEY_VIDEO_URI, null)
         set(v) = sp(this).edit().putString(KEY_VIDEO_URI, v).apply()
+
+    var Context.gifUri: String?
+        get() = sp(this).getString(KEY_GIF_URI, null)
+        set(v) = sp(this).edit().putString(KEY_GIF_URI, v).apply()
 
     var Context.mode: WallMode
         get() = WallMode.valueOf(sp(this).getString(KEY_MODE, WallMode.KEN_BURNS.name)!!)

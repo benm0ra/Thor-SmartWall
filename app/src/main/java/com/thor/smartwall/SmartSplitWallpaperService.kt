@@ -3,8 +3,11 @@ package com.thor.smartwall
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ImageDecoder
 import android.graphics.Matrix
 import android.graphics.Paint
+import android.graphics.drawable.AnimatedImageDrawable
+import android.graphics.drawable.Drawable
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Handler
@@ -15,6 +18,7 @@ import android.view.Display
 import android.view.SurfaceHolder
 import androidx.core.net.toUri
 import com.thor.smartwall.Prefs.gapFraction
+import com.thor.smartwall.Prefs.gifUri
 import com.thor.smartwall.Prefs.imageUri
 import com.thor.smartwall.Prefs.imageUriSecondary
 import com.thor.smartwall.Prefs.independentMode
@@ -40,6 +44,20 @@ class SmartSplitWallpaperService : WallpaperService() {
         private var myScreen: ScreenSpec? = null
         private var allScreens: List<ScreenSpec> = emptyList()
         private var readyBitmap: Bitmap? = null
+        private var gifDrawable: AnimatedImageDrawable? = null
+
+        // Lets an AnimatedImageDrawable schedule its own frame timing onto our Handler and
+        // ask us to redraw when a new frame is ready - the standard way to drive a Drawable's
+        // animation when it isn't hosted inside a View.
+        private val gifCallback = object : Drawable.Callback {
+            override fun invalidateDrawable(who: Drawable) { drawFrame() }
+            override fun scheduleDrawable(who: Drawable, what: Runnable, whenMs: Long) {
+                handler.postAtTime(what, whenMs)
+            }
+            override fun unscheduleDrawable(who: Drawable, what: Runnable) {
+                handler.removeCallbacks(what)
+            }
+        }
 
         private val kenBurnsPeriodMs = 26_000L
         private val overscan = 0.16f
@@ -75,9 +93,11 @@ class SmartSplitWallpaperService : WallpaperService() {
                 handler.removeCallbacks(drawRunnable)
                 handler.post(drawRunnable)
                 mediaPlayer?.start()
+                gifDrawable?.start()
             } else {
                 handler.removeCallbacks(drawRunnable)
                 mediaPlayer?.pause()
+                gifDrawable?.stop()
             }
         }
 
@@ -86,6 +106,8 @@ class SmartSplitWallpaperService : WallpaperService() {
             handler.removeCallbacks(drawRunnable)
             mediaPlayer?.release()
             mediaPlayer = null
+            gifDrawable?.callback = null
+            gifDrawable = null
         }
 
         override fun onDestroy() {
@@ -93,6 +115,8 @@ class SmartSplitWallpaperService : WallpaperService() {
             handler.removeCallbacks(drawRunnable)
             mediaPlayer?.release()
             mediaPlayer = null
+            gifDrawable?.callback = null
+            gifDrawable = null
         }
 
         /** Figures out which physical display this Engine instance belongs to, using the
@@ -112,6 +136,7 @@ class SmartSplitWallpaperService : WallpaperService() {
             val ctx = applicationContext
             when (ctx.mode) {
                 WallMode.VIDEO -> setupVideo(holder)
+                WallMode.GIF -> setupGif()
                 WallMode.STATIC, WallMode.KEN_BURNS -> setupImage()
             }
         }
@@ -119,6 +144,8 @@ class SmartSplitWallpaperService : WallpaperService() {
         private fun setupImage() {
             mediaPlayer?.release()
             mediaPlayer = null
+            gifDrawable?.callback = null
+            gifDrawable = null
 
             val ctx = applicationContext
             val screen = myScreen ?: return
@@ -146,6 +173,8 @@ class SmartSplitWallpaperService : WallpaperService() {
 
         private fun setupVideo(holder: SurfaceHolder) {
             readyBitmap = null
+            gifDrawable?.callback = null
+            gifDrawable = null
             val ctx = applicationContext
             val uriStr = ctx.videoUri ?: return
             try {
@@ -172,6 +201,38 @@ class SmartSplitWallpaperService : WallpaperService() {
             }
         }
 
+        /**
+         * Decodes an animated GIF with the platform's built-in ImageDecoder (available since
+         * API 28, no extra library needed) and drives its frame timing off our own Handler via
+         * gifCallback. Like video, a GIF fills each screen independently rather than doing the
+         * continuous crop-across-the-hinge trick, since it's a fixed pre-baked animation rather
+         * than something we can re-render from one big virtual canvas per screen.
+         */
+        private fun setupGif() {
+            mediaPlayer?.release()
+            mediaPlayer = null
+            readyBitmap = null
+            gifDrawable?.callback = null
+            gifDrawable = null
+
+            val ctx = applicationContext
+            val uriStr = ctx.gifUri ?: return
+            try {
+                val source = ImageDecoder.createSource(ctx.contentResolver, uriStr.toUri())
+                val drawable = ImageDecoder.decodeDrawable(source)
+                if (drawable is AnimatedImageDrawable) {
+                    drawable.repeatCount = AnimatedImageDrawable.REPEAT_INFINITE
+                    drawable.callback = gifCallback
+                    gifDrawable = drawable
+                    if (visible) drawable.start()
+                }
+            } catch (t: Throwable) {
+                android.util.Log.e("ThorSmartWall", "Failed to load GIF from $uriStr", t)
+                gifDrawable = null
+            }
+            drawFrame()
+        }
+
         private fun loadBitmap(uriStr: String?): Bitmap? {
             if (uriStr == null) return null
             return try {
@@ -180,6 +241,7 @@ class SmartSplitWallpaperService : WallpaperService() {
                     android.graphics.BitmapFactory.decodeStream(it)
                 }
             } catch (t: Throwable) {
+                android.util.Log.e("ThorSmartWall", "Failed to load image from $uriStr", t)
                 null
             }
         }
@@ -193,17 +255,67 @@ class SmartSplitWallpaperService : WallpaperService() {
             try {
                 canvas = holder.lockCanvas()
                 canvas?.let { c ->
-                    c.drawColor(Color.BLACK)
-                    val bmp = readyBitmap
-                    if (bmp != null) {
-                        val matrix = if (ctx.mode == WallMode.KEN_BURNS) kenBurnsMatrix(bmp, c.width, c.height)
-                        else fitMatrix(bmp, c.width, c.height)
-                        c.drawBitmap(bmp, matrix, Paint(Paint.FILTER_BITMAP_FLAG))
+                    when (ctx.mode) {
+                        WallMode.GIF -> {
+                            val drawable = gifDrawable
+                            if (drawable != null) {
+                                c.drawColor(Color.BLACK)
+                                drawGifCentered(c, drawable)
+                            } else {
+                                drawNoContentMessage(c)
+                            }
+                        }
+                        else -> {
+                            val bmp = readyBitmap
+                            if (bmp != null) {
+                                c.drawColor(Color.BLACK)
+                                val matrix = if (ctx.mode == WallMode.KEN_BURNS) kenBurnsMatrix(bmp, c.width, c.height)
+                                else fitMatrix(bmp, c.width, c.height)
+                                c.drawBitmap(bmp, matrix, Paint(Paint.FILTER_BITMAP_FLAG))
+                            } else {
+                                drawNoContentMessage(c)
+                            }
+                        }
                     }
                 }
             } finally {
                 if (canvas != null) holder.unlockCanvasAndPost(canvas)
             }
+        }
+
+        /** Center-crop-fills this screen's surface with the GIF's current frame, no stretching. */
+        private fun drawGifCentered(c: Canvas, drawable: AnimatedImageDrawable) {
+            val dw = drawable.intrinsicWidth.takeIf { it > 0 } ?: return
+            val dh = drawable.intrinsicHeight.takeIf { it > 0 } ?: return
+            val scale = maxOf(c.width.toFloat() / dw, c.height.toFloat() / dh)
+            val scaledW = dw * scale
+            val scaledH = dh * scale
+            val dx = (c.width - scaledW) / 2f
+            val dy = (c.height - scaledH) / 2f
+
+            c.save()
+            c.translate(dx, dy)
+            c.scale(scale, scale)
+            drawable.setBounds(0, 0, dw, dh)
+            drawable.draw(c)
+            c.restore()
+        }
+
+        /**
+         * Deliberately NOT plain black: if you see this dark red screen instead of your art,
+         * something failed to load (permission lost, file moved, bad format, etc) rather than
+         * the app just not doing anything.
+         */
+        private fun drawNoContentMessage(c: Canvas) {
+            c.drawColor(Color.parseColor("#3A1620"))
+            val textPaint = Paint().apply {
+                color = Color.WHITE
+                textSize = 36f
+                isAntiAlias = true
+                textAlign = Paint.Align.CENTER
+            }
+            c.drawText("Thor Smart Split: no image loaded", c.width / 2f, c.height / 2f, textPaint)
+            c.drawText("Reopen the app and pick media again", c.width / 2f, c.height / 2f + 50f, textPaint)
         }
 
         /** Straight fill: bitmap already matches the surface size (this is the STATIC path). */

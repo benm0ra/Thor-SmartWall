@@ -71,6 +71,13 @@
             android:layout_marginTop="8dp"
             android:text="@string/pick_video" />
 
+        <Button
+            android:id="@+id/btnPickGif"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/pick_gif" />
+
         <com.google.android.material.switchmaterial.SwitchMaterial
             android:id="@+id/switchIndependent"
             android:layout_width="match_parent"
@@ -137,6 +144,12 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/mode_video" />
+
+            <RadioButton
+                android:id="@+id/radioGif"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/mode_gif" />
         </RadioGroup>
 
         <Button

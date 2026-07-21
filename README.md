@@ -20,9 +20,10 @@ end, with two easy options.
 5. Copy that APK to the Thor (USB, or a cloud drive) and install it (enable "Install unknown apps" for whatever app you use to open it).
 
 ### Option B — no local install at all
-Push this folder to a GitHub repo and add a one-file GitHub Actions workflow
-that runs `./gradlew assembleDebug` and uploads the APK as a build artifact —
-free, no local SDK needed. Ask me and I'll write that workflow file too.
+This repo already includes `.github/workflows/build-apk.yml`. Push it to a
+GitHub repo (even just by dragging the unzipped folder into GitHub's web
+upload page — no `git` command line needed) and the **Actions** tab will
+build `app-debug.apk` for you automatically and let you download it.
 
 ## How to use it once installed
 1. Open **Thor Smart Split**, pick an image.
@@ -75,6 +76,8 @@ will always work, live-wallpaper-engine support or not.
   full GPU transcode pipeline) — pick a source near 1080×1920 or 1080×1240
   for the least distortion, the same tradeoff real Wallpaper Engine makes for
   multi-monitor video wallpapers.
+- **Animated GIF mode**: decodes with Android's built-in `ImageDecoder` (API
+  28+, no extra library), same per-screen-independent tradeoff as video.
 
 ## Project layout
 ```

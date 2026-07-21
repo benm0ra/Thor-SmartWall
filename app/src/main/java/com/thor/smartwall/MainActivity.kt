@@ -13,6 +13,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.thor.smartwall.Prefs.gapFraction
+import com.thor.smartwall.Prefs.gifUri
 import com.thor.smartwall.Prefs.imageUri
 import com.thor.smartwall.Prefs.imageUriSecondary
 import com.thor.smartwall.Prefs.independentMode
@@ -30,17 +31,34 @@ class MainActivity : AppCompatActivity() {
     private var primaryBitmap: Bitmap? = null
     private var secondaryBitmap: Bitmap? = null
 
-    private val pickPrimary = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+    private val pickPrimary = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let { persistAndLoad(it, isSecondary = false) }
     }
-    private val pickSecondary = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+    private val pickSecondary = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let { persistAndLoad(it, isSecondary = true) }
     }
-    private val pickVideo = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+    private val pickVideo = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let {
-            contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            try {
+                contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (_: SecurityException) {
+                // Some providers still won't grant a lasting permission even through the
+                // document picker; the video will still play for this app session, it just
+                // may need re-picking after a reboot.
+            }
             videoUri = it.toString()
             Toast.makeText(this, R.string.video_loaded, Toast.LENGTH_SHORT).show()
+        }
+    }
+    private val pickGif = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let {
+            try {
+                contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (_: SecurityException) {
+                // Same caveat as the video picker above.
+            }
+            gifUri = it.toString()
+            Toast.makeText(this, R.string.gif_loaded, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -52,9 +70,10 @@ class MainActivity : AppCompatActivity() {
         restoreUiFromPrefs()
         loadExistingImages()
 
-        binding.btnPickImage.setOnClickListener { pickPrimary.launch("image/*") }
-        binding.btnPickSecondary.setOnClickListener { pickSecondary.launch("image/*") }
-        binding.btnPickVideo.setOnClickListener { pickVideo.launch("video/*") }
+        binding.btnPickImage.setOnClickListener { pickPrimary.launch(arrayOf("image/*")) }
+        binding.btnPickSecondary.setOnClickListener { pickSecondary.launch(arrayOf("image/*")) }
+        binding.btnPickVideo.setOnClickListener { pickVideo.launch(arrayOf("video/*")) }
+        binding.btnPickGif.setOnClickListener { pickGif.launch(arrayOf("image/gif")) }
 
         binding.switchIndependent.setOnCheckedChangeListener { _, checked ->
             independentMode = checked
@@ -84,6 +103,7 @@ class MainActivity : AppCompatActivity() {
         binding.radioStatic.setOnClickListener { mode = WallMode.STATIC; renderPreview() }
         binding.radioKenBurns.setOnClickListener { mode = WallMode.KEN_BURNS; renderPreview() }
         binding.radioVideo.setOnClickListener { mode = WallMode.VIDEO }
+        binding.radioGif.setOnClickListener { mode = WallMode.GIF }
 
         binding.btnApplyLive.setOnClickListener { applyAsLiveWallpaper() }
         binding.btnExport.setOnClickListener { exportSplitImages() }
@@ -100,6 +120,7 @@ class MainActivity : AppCompatActivity() {
             WallMode.STATIC -> binding.radioStatic.isChecked = true
             WallMode.KEN_BURNS -> binding.radioKenBurns.isChecked = true
             WallMode.VIDEO -> binding.radioVideo.isChecked = true
+            WallMode.GIF -> binding.radioGif.isChecked = true
         }
     }
 
