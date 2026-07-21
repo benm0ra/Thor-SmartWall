@@ -36,6 +36,8 @@ object Prefs {
     private const val KEY_ROTATION_OVERRIDE = "rotation_override_degrees"
     private const val KEY_VIDEO_SMOOTH = "video_smooth_mode"
     private const val KEY_VIDEO_SMOOTHNESS = "video_smoothness_level"
+    private const val KEY_SPLIT_VIDEO_TOP = "split_video_top_path"
+    private const val KEY_SPLIT_VIDEO_BOTTOM = "split_video_bottom_path"
 
     private fun sp(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -95,6 +97,19 @@ object Prefs {
             sp(this).getString(KEY_VIDEO_SMOOTHNESS, VideoSmoothness.LOW.name)!!
         )
         set(v) = sp(this).edit().putString(KEY_VIDEO_SMOOTHNESS, v.name).apply()
+
+    /**
+     * Paths to the pre-cropped per-screen video files produced by VideoSplitTranscoder. When both
+     * are set (and videoSmoothMode is off), the wallpaper plays these directly with MediaPlayer -
+     * smooth AND split. Null when no pre-split has been done for the current video.
+     */
+    var Context.splitVideoTopPath: String?
+        get() = sp(this).getString(KEY_SPLIT_VIDEO_TOP, null)
+        set(v) = sp(this).edit().putString(KEY_SPLIT_VIDEO_TOP, v).apply()
+
+    var Context.splitVideoBottomPath: String?
+        get() = sp(this).getString(KEY_SPLIT_VIDEO_BOTTOM, null)
+        set(v) = sp(this).edit().putString(KEY_SPLIT_VIDEO_BOTTOM, v).apply()
 
     var Context.orientationVertical: Boolean
         get() = sp(this).getBoolean(KEY_ORIENTATION, true)

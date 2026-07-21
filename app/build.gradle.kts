@@ -58,4 +58,8 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.activity:activity-ktx:1.9.1")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+    // Mature MediaCodec-based transcoder used to pre-crop a video into per-screen files ONCE,
+    // so the wallpaper can then play each with a plain MediaPlayer (smooth) that's already the
+    // right shape (split). Avoids hand-rolling a MediaCodec+GL pipeline. https://github.com/natario1/Transcoder
+    implementation("com.otaliastudios:transcoder:0.11.2")
 }

@@ -23,6 +23,8 @@ import com.thor.smartwall.Prefs.rotationOverrideDegrees
 import com.thor.smartwall.Prefs.swapOrder
 import com.thor.smartwall.Prefs.videoSmoothMode
 import com.thor.smartwall.Prefs.videoSmoothness
+import com.thor.smartwall.Prefs.splitVideoTopPath
+import com.thor.smartwall.Prefs.splitVideoBottomPath
 import com.thor.smartwall.Prefs.videoUri
 import com.thor.smartwall.databinding.ActivityMainBinding
 import java.io.File
@@ -42,6 +44,30 @@ class MainActivity : AppCompatActivity() {
 
     private val previewHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val previewRunnable = Runnable { renderPreviewNow() }
+
+    // Animated video preview: a handful of pre-cropped (top,bottom) frame pairs cycled on a timer,
+    // so the preview actually shows the motion instead of a frozen still. Kept small and downscaled
+    // since it's just a thumbnail-sized loop. A generation counter cancels a stale sampling job if
+    // the user changes settings/media before it finishes.
+    private var previewVideoFrames: List<Pair<Bitmap?, Bitmap?>> = emptyList()
+    private var previewVideoIndex = 0
+    private var previewVideoGeneration = 0
+    private val previewVideoHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val previewVideoTick = object : Runnable {
+        override fun run() {
+            val frames = previewVideoFrames
+            if (frames.isEmpty()) return
+            val pair = frames[previewVideoIndex % frames.size]
+            binding.previewTop.setImageBitmap(pair.first)
+            binding.previewBottom.setImageBitmap(pair.second)
+            previewVideoIndex++
+            previewVideoHandler.postDelayed(this, 350L) // ~3 fps: enough to read as motion in a thumbnail
+        }
+    }
+
+    private fun stopPreviewVideoLoop() {
+        previewVideoHandler.removeCallbacks(previewVideoTick)
+    }
 
     // Live status-bar clock, 3DS-style. Ticks while the screen is on the settings UI.
     private val clockHandler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -118,9 +144,12 @@ class MainActivity : AppCompatActivity() {
             type.startsWith("video/") -> {
                 videoUri = uri.toString()
                 mode = WallMode.VIDEO
+                // Any previously pre-split files belong to the OLD video - discard them.
+                clearSplitVideoFiles()
                 restoreUiFromPrefs()
                 renderPreview()
                 Toast.makeText(this, R.string.video_loaded, Toast.LENGTH_SHORT).show()
+                promptPreSplitVideo(uri)
             }
             type.startsWith("image/") -> {
                 if (mode == WallMode.GIF || mode == WallMode.VIDEO) {
@@ -233,11 +262,13 @@ class MainActivity : AppCompatActivity() {
         restoreUiFromPrefs()
         clockHandler.removeCallbacks(clockRunnable)
         clockHandler.post(clockRunnable)
+        renderPreview() // re-samples/animates the video preview if we're on video mode
     }
 
     override fun onPause() {
         super.onPause()
         clockHandler.removeCallbacks(clockRunnable)
+        stopPreviewVideoLoop() // don't animate while backgrounded
     }
 
     /** The smoothness tiers only affect split video; hide them when Smooth (duplicated) is on. */
@@ -329,6 +360,7 @@ class MainActivity : AppCompatActivity() {
     /** Draws a live simulation of the Thor's two screens reflecting whatever is actually picked right now. */
     private fun renderPreviewNow() {
         updateEmptyHint()
+        if (mode != WallMode.VIDEO) stopPreviewVideoLoop()
         when (mode) {
             WallMode.VIDEO -> renderVideoPreview()
             WallMode.GIF -> renderGifPreview()
@@ -367,14 +399,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Video preview: decodes one frame in the background (MediaMetadataRetriever isn't cheap
-     * enough to call on the UI thread) and runs it through the same continuous-split crop the
-     * live wallpaper's split mode uses, or an independent per-screen crop for smooth mode -
-     * matching whichever behavior is actually going to happen once applied.
+     * Animated video preview: samples several frames across the clip in the background (one
+     * MediaMetadataRetriever pass), crops each through the SAME split math the live wallpaper
+     * uses, then loops the pre-cropped pairs on a timer so the preview shows the actual motion
+     * and the actual split - matching what you'll get once applied.
      */
     private fun renderVideoPreview() {
         val uriStr = videoUri
         if (uriStr == null) {
+            stopPreviewVideoLoop()
             binding.previewTop.setImageBitmap(null)
             binding.previewBottom.setImageBitmap(null)
             return
@@ -382,30 +415,60 @@ class MainActivity : AppCompatActivity() {
         val smooth = videoSmoothMode
         val orientation = if (orientationVertical) StackOrientation.VERTICAL else StackOrientation.HORIZONTAL
         val gap = gapFraction
+        val generation = ++previewVideoGeneration
+        val previewFrameCount = 10 // small: it's a thumbnail-sized loop, not the real wallpaper
+
         Thread {
-            val frame = try {
+            val pairs = try {
                 android.media.MediaMetadataRetriever().use { retriever ->
                     retriever.setDataSource(this, Uri.parse(uriStr))
-                    retriever.getScaledFrameAtTime(0L, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 480, 270)
-                        ?: retriever.getFrameAtTime(0L)
+                    val durationMs = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
+                        ?.toLongOrNull()?.coerceAtLeast(1L) ?: 1000L
+                    val screens = DisplayDetector.PREVIEW_FALLBACK
+                    val out = mutableListOf<Pair<Bitmap?, Bitmap?>>()
+                    for (i in 0 until previewFrameCount) {
+                        if (generation != previewVideoGeneration) break
+                        val timeUs = durationMs * 1000L * i.toLong() / previewFrameCount.toLong()
+                        val raw = try {
+                            retriever.getScaledFrameAtTime(
+                                timeUs, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 480, 270
+                            )
+                        } catch (_: Throwable) {
+                            null
+                        } ?: retriever.getFrameAtTime(timeUs, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                        if (raw != null) {
+                            val crops = if (smooth) {
+                                SplitEngine.computeIndependentCrops(
+                                    mapOf(screens[0].displayId to raw, screens[1].displayId to raw), screens
+                                )
+                            } else {
+                                SplitEngine.computeCrops(raw, screens, orientation, gap)
+                            }
+                            out.add(crops[screens[0].displayId] to crops[screens[1].displayId])
+                        }
+                    }
+                    out
                 }
             } catch (t: Throwable) {
-                null
+                emptyList()
             }
             runOnUiThread {
-                if (frame == null) {
+                if (generation != previewVideoGeneration) return@runOnUiThread
+                stopPreviewVideoLoop()
+                if (pairs.isEmpty()) {
                     binding.previewTop.setImageBitmap(null)
                     binding.previewBottom.setImageBitmap(null)
                     return@runOnUiThread
                 }
-                val screens = DisplayDetector.PREVIEW_FALLBACK
-                val crops = if (smooth) {
-                    SplitEngine.computeIndependentCrops(mapOf(screens[0].displayId to frame, screens[1].displayId to frame), screens)
+                previewVideoFrames = pairs
+                previewVideoIndex = 0
+                if (pairs.size == 1) {
+                    // Only one frame could be extracted - just show it, nothing to animate.
+                    binding.previewTop.setImageBitmap(pairs[0].first)
+                    binding.previewBottom.setImageBitmap(pairs[0].second)
                 } else {
-                    SplitEngine.computeCrops(frame, screens, orientation, gap)
+                    previewVideoHandler.post(previewVideoTick)
                 }
-                binding.previewTop.setImageBitmap(crops[screens[0].displayId])
-                binding.previewBottom.setImageBitmap(crops[screens[1].displayId])
             }
         }.start()
     }
@@ -443,6 +506,74 @@ class MainActivity : AppCompatActivity() {
         val w = (bmp.width * scale).toInt().coerceAtLeast(1)
         val h = (bmp.height * scale).toInt().coerceAtLeast(1)
         return Bitmap.createScaledBitmap(bmp, w, h, true)
+    }
+
+    private fun clearSplitVideoFiles() {
+        splitVideoTopPath = null
+        splitVideoBottomPath = null
+        runCatching { VideoSplitTranscoder.outputFileFor(this, "top").delete() }
+        runCatching { VideoSplitTranscoder.outputFileFor(this, "bottom").delete() }
+    }
+
+    /**
+     * Offers the one-time pre-split so the video can play back smooth AND split. This is the
+     * heavier, higher-quality path; it's optional because the choppy-but-instant frame-sampled
+     * path still works if the user doesn't want to wait.
+     */
+    private fun promptPreSplitVideo(uri: Uri) {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle(R.string.presplit_title)
+            .setMessage(R.string.presplit_message)
+            .setPositiveButton(R.string.presplit_confirm) { _, _ -> startPreSplit(uri) }
+            .setNegativeButton(R.string.presplit_skip, null)
+            .show()
+    }
+
+    private fun startPreSplit(uri: Uri) {
+        val screens = DisplayDetector.PREVIEW_FALLBACK
+        val progress = android.app.ProgressDialog(this).apply {
+            setTitle(getString(R.string.presplit_working_title))
+            setMessage(getString(R.string.presplit_working_message))
+            setProgressStyle(android.app.ProgressDialog.STYLE_HORIZONTAL)
+            max = 100
+            setCancelable(false)
+            show()
+        }
+        DebugLog.d("Pre-split requested for $uri")
+        VideoSplitTranscoder.split(
+            context = this,
+            sourceUri = uri,
+            topWidth = screens[0].widthPx,
+            topHeight = screens[0].heightPx,
+            bottomWidth = screens[1].widthPx,
+            bottomHeight = screens[1].heightPx,
+            callback = object : VideoSplitTranscoder.Callback {
+                override fun onProgress(fraction: Double) {
+                    progress.progress = (fraction * 100).toInt()
+                }
+
+                override fun onComplete(topFile: java.io.File, bottomFile: java.io.File) {
+                    splitVideoTopPath = topFile.absolutePath
+                    splitVideoBottomPath = bottomFile.absolutePath
+                    runCatching { progress.dismiss() }
+                    androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
+                        .setTitle(R.string.presplit_done_title)
+                        .setMessage(R.string.presplit_done_message)
+                        .setPositiveButton(android.R.string.ok, null)
+                        .show()
+                }
+
+                override fun onError(message: String) {
+                    clearSplitVideoFiles()
+                    runCatching { progress.dismiss() }
+                    androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
+                        .setTitle(R.string.presplit_failed_title)
+                        .setMessage(getString(R.string.presplit_failed_message, message))
+                        .setPositiveButton(android.R.string.ok, null)
+                        .show()
+                }
+            }
+        )
     }
 
     private fun applyAsLiveWallpaper() {

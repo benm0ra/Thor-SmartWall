@@ -27,6 +27,8 @@ import com.thor.smartwall.Prefs.mode
 import com.thor.smartwall.Prefs.orientationVertical
 import com.thor.smartwall.Prefs.rotationOverrideDegrees
 import com.thor.smartwall.Prefs.swapOrder
+import com.thor.smartwall.Prefs.splitVideoTopPath
+import com.thor.smartwall.Prefs.splitVideoBottomPath
 import com.thor.smartwall.Prefs.videoSmoothMode
 import com.thor.smartwall.Prefs.videoSmoothness
 import com.thor.smartwall.Prefs.videoUri
@@ -292,14 +294,68 @@ class SmartSplitWallpaperService : WallpaperService() {
         }
 
         /**
-         * Video has two honest, mutually-exclusive tradeoffs (see Prefs.videoSmoothMode):
-         * smooth playback via MediaPlayer that can't crop (duplicated across screens), or a
-         * frame-sampled slideshow through the same crop math images use (correctly split,
-         * choppier motion). This picks whichever the person chose in the Motion section.
+         * Video playback picks the best available path:
+         * 1. Pre-split files exist (from VideoSplitTranscoder) -> play this screen's own cropped
+         *    file with MediaPlayer. Smooth AND split. The preferred path.
+         * 2. Smooth mode on -> play the original with MediaPlayer (smooth, duplicated).
+         * 3. Otherwise -> frame-sampled slideshow (split, choppy). The fallback.
          */
         private fun setupVideo(holder: SurfaceHolder) {
             val ctx = applicationContext
-            if (ctx.videoSmoothMode) setupVideoSmooth(holder) else setupVideoSplit()
+            val topPath = ctx.splitVideoTopPath
+            val bottomPath = ctx.splitVideoBottomPath
+            val haveSplitFiles = topPath != null && bottomPath != null &&
+                java.io.File(topPath).exists() && java.io.File(bottomPath).exists()
+
+            when {
+                haveSplitFiles && !ctx.videoSmoothMode -> setupVideoPreSplit(holder, topPath!!, bottomPath!!)
+                ctx.videoSmoothMode -> setupVideoSmooth(holder)
+                else -> setupVideoSplit()
+            }
+        }
+
+        /**
+         * Plays the pre-cropped file matching THIS engine's screen. Because each file is already
+         * the right shape, a plain MediaPlayer drawing straight to the surface gives smooth,
+         * full-framerate, correctly-split video - the whole point of the pre-split approach.
+         */
+        private fun setupVideoPreSplit(holder: SurfaceHolder, topPath: String, bottomPath: String) {
+            videoFrames = emptyList()
+            readyBitmap = null
+            gifDrawable?.callback = null
+            gifDrawable = null
+
+            // Which cropped file belongs to this engine's screen? The top screen is the default
+            // display (order 0); anything else is the bottom.
+            val isTop = (myLogicalScreen?.order ?: 0) == 0
+            val path = if (isTop) topPath else bottomPath
+            DebugLog.d("setupVideoPreSplit: screen id=${myLogicalScreen?.displayId} isTop=$isTop -> $path")
+
+            try {
+                mediaPlayer?.release()
+                val mp = MediaPlayer()
+                mp.setDataSource(path)
+                mp.setSurface(holder.surface)
+                mp.isLooping = true
+                mp.setVolume(0f, 0f)
+                mp.setOnPreparedListener {
+                    val epoch = Prefs.getOrCreateEpoch(applicationContext)
+                    val elapsed = SystemClock.elapsedRealtime() - epoch
+                    val duration = it.duration.takeIf { d -> d > 0 } ?: 1
+                    it.seekTo((elapsed % duration).toInt())
+                    if (shouldPlay()) it.start()
+                }
+                mp.setOnErrorListener { _, what, extra ->
+                    DebugLog.e("setupVideoPreSplit: MediaPlayer error what=$what extra=$extra path=$path")
+                    false
+                }
+                mp.prepareAsync()
+                mediaPlayer = mp
+            } catch (t: Throwable) {
+                DebugLog.e("setupVideoPreSplit: failed to play $path", t)
+                mediaPlayer = null
+                drawFrame() // fall back to a diagnostic rather than a blank screen
+            }
         }
 
         /** Smooth path: hand the file straight to MediaPlayer, which draws directly to the surface. */

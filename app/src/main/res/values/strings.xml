@@ -78,6 +78,16 @@
     <string name="export_failed">Export failed</string>
     <string name="exported_to">Saved to %1$s</string>
     <string name="video_loaded">Video loaded</string>
+    <string name="presplit_title">Make it smooth?</string>
+    <string name="presplit_message">This video can be prepared for smooth, full-speed playback that\'s still split across both screens. It takes a little processing now (usually under a minute), done once. If you skip it, the video still works but motion on the split will be choppier.</string>
+    <string name="presplit_confirm">Prepare it</string>
+    <string name="presplit_skip">Skip</string>
+    <string name="presplit_working_title">Preparing your video</string>
+    <string name="presplit_working_message">Cropping for each screen. This happens once - you can keep the app open.</string>
+    <string name="presplit_done_title">Ready</string>
+    <string name="presplit_done_message">Your video is prepared. Tap Set as Live Wallpaper to use it - it\'ll play smoothly on both screens.</string>
+    <string name="presplit_failed_title">Couldn\'t prepare video</string>
+    <string name="presplit_failed_message">%1$s\n\nThe video will still play using the choppier split method, or you can try Smooth mode in Motion.</string>
     <string name="gif_loaded">GIF loaded</string>
     <string name="open_wallpaper_picker_manually">Open Settings ▸ Wallpaper and pick ThorPaper manually</string>
 </resources>
