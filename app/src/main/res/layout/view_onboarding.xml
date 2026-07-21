@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/onboardingOverlay"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#CC0E1116"
+    android:clickable="true"
+    android:focusable="true"
+    android:visibility="gone">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="24dp"
+        android:background="@drawable/tile_bg"
+        android:padding="24dp">
+
+        <!-- Big category-style icon for the current step -->
+        <ImageView
+            android:id="@+id/onboardIcon"
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:layout_gravity="center_horizontal"
+            android:background="@drawable/icon_chip_bg"
+            android:backgroundTint="@color/accent"
+            android:padding="18dp"
+            android:src="@drawable/ic_cat_source"
+            android:contentDescription="@null" />
+
+        <TextView
+            android:id="@+id/onboardTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:gravity="center"
+            android:textColor="@color/ink"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:text="@string/onboard_1_title" />
+
+        <TextView
+            android:id="@+id/onboardBody"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center"
+            android:textColor="@color/ink_soft"
+            android:textSize="14sp"
+            android:lineSpacingExtra="3dp"
+            android:text="@string/onboard_1_body" />
+
+        <!-- Step dots -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:orientation="horizontal"
+            android:layout_marginTop="20dp">
+
+            <View android:id="@+id/dot0" android:layout_width="8dp" android:layout_height="8dp"
+                android:layout_marginEnd="6dp" android:background="@drawable/icon_chip_bg" android:backgroundTint="@color/accent" />
+            <View android:id="@+id/dot1" android:layout_width="8dp" android:layout_height="8dp"
+                android:layout_marginEnd="6dp" android:background="@drawable/icon_chip_bg" android:backgroundTint="@color/tile_border" />
+            <View android:id="@+id/dot2" android:layout_width="8dp" android:layout_height="8dp"
+                android:layout_marginEnd="6dp" android:background="@drawable/icon_chip_bg" android:backgroundTint="@color/tile_border" />
+            <View android:id="@+id/dot3" android:layout_width="8dp" android:layout_height="8dp"
+                android:background="@drawable/icon_chip_bg" android:backgroundTint="@color/tile_border" />
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/onboardNext"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="22dp"
+            android:background="@drawable/accent_button_bg"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold"
+            android:textSize="16sp"
+            android:textAllCaps="false"
+            android:stateListAnimator="@null"
+            android:text="@string/onboard_next" />
+
+        <Button
+            android:id="@+id/onboardSkip"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="6dp"
+            android:background="@android:color/transparent"
+            android:textColor="@color/ink_soft"
+            android:textAllCaps="false"
+            android:text="@string/onboard_skip" />
+    </LinearLayout>
+</FrameLayout>

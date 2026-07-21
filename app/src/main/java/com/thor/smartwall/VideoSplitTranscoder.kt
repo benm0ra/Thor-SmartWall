@@ -61,12 +61,24 @@ object VideoSplitTranscoder {
         val bW = (bottomWidth / 2) * 2
         val bH = (bottomHeight / 2) * 2
 
-        val topStrategy = DefaultVideoStrategy.exact(tW, tH).build()
-        val bottomStrategy = DefaultVideoStrategy.exact(bW, bH).build()
+        // Conservative, widely-playable output. exact(w,h) crops to the screen aspect; the extra
+        // options (explicit frame rate + regular key frames) produce a file the device's own
+        // decoder is far more likely to play back on a wallpaper surface. Audio is removed - a
+        // wallpaper is silent, and dropping the audio track avoids a class of muxing failures.
+        val topStrategy = DefaultVideoStrategy.exact(tW, tH)
+            .frameRate(30)
+            .keyFrameInterval(1f)
+            .build()
+        val bottomStrategy = DefaultVideoStrategy.exact(bW, bH)
+            .frameRate(30)
+            .keyFrameInterval(1f)
+            .build()
+        val noAudio = com.otaliastudios.transcoder.strategy.RemoveTrackStrategy()
 
         Transcoder.into(topOut.absolutePath)
             .addDataSource(context, sourceUri)
             .setVideoTrackStrategy(topStrategy)
+            .setAudioTrackStrategy(noAudio)
             .setListener(object : TranscoderListener {
                 override fun onTranscodeProgress(progress: Double) {
                     callback.onProgress(progress * 0.5) // top is first half of overall progress
@@ -101,6 +113,7 @@ object VideoSplitTranscoder {
         Transcoder.into(bottomOut.absolutePath)
             .addDataSource(context, sourceUri)
             .setVideoTrackStrategy(bottomStrategy)
+            .setAudioTrackStrategy(com.otaliastudios.transcoder.strategy.RemoveTrackStrategy())
             .setListener(object : TranscoderListener {
                 override fun onTranscodeProgress(progress: Double) {
                     callback.onProgress(0.5 + progress * 0.5) // bottom is second half

@@ -345,7 +345,25 @@ class SmartSplitWallpaperService : WallpaperService() {
             val isTop = (myLogicalScreen?.order ?: 0) == 0
             val path = if (isTop) topPath else bottomPath
             val myGeneration = ++contentGeneration
-            DebugLog.d("setupVideoPreSplit: gen=$myGeneration screen id=${myLogicalScreen?.displayId} isTop=$isTop -> $path")
+
+            // Inspect the file before trusting it. what=-38 on every attempt points at the file
+            // itself, so log what we can actually observe about it: size + whether the platform
+            // can read its metadata back (a proxy for "is this a valid playable MP4").
+            val f = java.io.File(path)
+            val sizeKb = if (f.exists()) f.length() / 1024 else -1
+            val probe = try {
+                android.media.MediaMetadataRetriever().use { r ->
+                    r.setDataSource(path)
+                    val w = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+                    val h = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+                    val dur = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
+                    val hasVideo = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO)
+                    "probe ok: ${w}x$h dur=${dur}ms hasVideo=$hasVideo"
+                }
+            } catch (t: Throwable) {
+                "probe FAILED: ${t.javaClass.simpleName}: ${t.message}"
+            }
+            DebugLog.d("setupVideoPreSplit: gen=$myGeneration screen id=${myLogicalScreen?.displayId} isTop=$isTop size=${sizeKb}KB $probe -> $path")
 
             if (!holder.surface.isValid) {
                 DebugLog.w("setupVideoPreSplit: surface not valid yet, skipping (gen=$myGeneration)")
@@ -356,18 +374,21 @@ class SmartSplitWallpaperService : WallpaperService() {
                 mediaPlayer?.release()
                 mediaPlayer = null
                 val mp = MediaPlayer()
-                mp.setDataSource(path)
+                // Use a FileInputStream FD rather than a path string - more reliable for
+                // app-private files and lets us fail loudly if the file can't even be opened.
+                val fis = java.io.FileInputStream(f)
+                mp.setDataSource(fis.fd)
+                fis.close()
                 mp.setSurface(holder.surface)
                 mp.isLooping = true
                 mp.setVolume(0f, 0f)
                 mp.setOnPreparedListener { player ->
-                    // If this engine was torn down or superseded while we were preparing, don't
-                    // touch the player against a dead surface - that's what threw what=-38.
                     if (myGeneration != contentGeneration || currentHolder !== holder) {
                         DebugLog.d("setupVideoPreSplit: gen=$myGeneration superseded before prepared; releasing")
                         runCatching { player.release() }
                         return@setOnPreparedListener
                     }
+                    DebugLog.d("setupVideoPreSplit: gen=$myGeneration PREPARED ok, starting playback")
                     val epoch = Prefs.getOrCreateEpoch(applicationContext)
                     val elapsed = SystemClock.elapsedRealtime() - epoch
                     val duration = player.duration.takeIf { d -> d > 0 } ?: 1

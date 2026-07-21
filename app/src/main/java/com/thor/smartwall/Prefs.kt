@@ -38,6 +38,7 @@ object Prefs {
     private const val KEY_VIDEO_SMOOTHNESS = "video_smoothness_level"
     private const val KEY_SPLIT_VIDEO_TOP = "split_video_top_path"
     private const val KEY_SPLIT_VIDEO_BOTTOM = "split_video_bottom_path"
+    private const val KEY_ONBOARDING_DONE = "onboarding_done"
 
     private fun sp(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -110,6 +111,11 @@ object Prefs {
     var Context.splitVideoBottomPath: String?
         get() = sp(this).getString(KEY_SPLIT_VIDEO_BOTTOM, null)
         set(v) = sp(this).edit().putString(KEY_SPLIT_VIDEO_BOTTOM, v).apply()
+
+    /** True once the user has seen (or skipped) the first-run walkthrough. */
+    var Context.onboardingDone: Boolean
+        get() = sp(this).getBoolean(KEY_ONBOARDING_DONE, false)
+        set(v) = sp(this).edit().putBoolean(KEY_ONBOARDING_DONE, v).apply()
 
     var Context.orientationVertical: Boolean
         get() = sp(this).getBoolean(KEY_ORIENTATION, true)

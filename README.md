@@ -1,141 +1,171 @@
-# ThorPaper — a Wallpaper-Engine-style live wallpaper for the AYN Thor
+# ThorPaper
 
-A live wallpaper app that takes one image (or video) and splits it correctly
-across the AYN Thor's two OLED panels, used landscape Switch-style (1920×1080
-top / 1240×1080 bottom), instead of the usual "same picture stretched twice,
-doesn't line up" result.
+A live-wallpaper app for the **AYN Thor** dual-screen Android handheld. It takes
+one photo, GIF, or video and displays it correctly across **both** screens —
+cropped and aligned per screen instead of the usual "same image stretched twice,
+doesn't line up" result you get from the stock wallpaper picker.
 
-## Why you have to build this yourself
+> **Status:** functional, in active user testing. Not yet on any app store — you
+> build and sideload it yourself (see [Building](#building)).
 
-I put this together in a sandboxed environment with **no internet access and
-no Android SDK installed**, so I could write and sanity-check all the source
-correctly, but I couldn't actually invoke Gradle/AAPT/the Kotlin compiler to
-spit out a signed `.apk`. The good news: the fix is one build step on your
-end, with two easy options.
+---
 
-### Option A — Android Studio (recommended, ~2 minutes)
-1. Install [Android Studio](https://developer.android.com/studio) if you don't have it.
-2. `File → Open` → select the `ThorSmartWall` folder.
-3. Let Gradle sync (first time downloads the Android SDK/build tools automatically).
-4. `Build → Generate Signed Bundle / APK` (or just hit Run with the Thor plugged in via USB debugging) → you get `app-debug.apk` under `app/build/outputs/apk/debug/`.
-5. Copy that APK to the Thor (USB, or a cloud drive) and install it (enable "Install unknown apps" for whatever app you use to open it).
+## For users
 
-### Option B — no local install at all
-This repo already includes `.github/workflows/build-apk.yml`. Push it to a
-GitHub repo (even just by dragging the unzipped folder into GitHub's web
-upload page — no `git` command line needed) and the **Actions** tab will
-build `app-debug.apk` for you automatically and let you download it.
+### What it does
 
-## If splitting still doesn't look right
-Tap **Show Screen Info (diagnostics)** in the app with the Thor open. It
-lists exactly what Android's `DisplayManager` sees system-wide right now.
+- **One wallpaper, both screens.** Pick any image, GIF, or video; ThorPaper sizes
+  and crops it for the Thor's top (1920×1080) and bottom (1240×1080) panels.
+- **Auto-detects media type.** Choose a file and it figures out whether it's a
+  photo, GIF, or video and sets the right mode for you.
+- **Live preview.** A small on-screen Thor shows how your wallpaper will look on
+  both screens before you apply it — videos animate in the preview too.
+- **Smooth split video.** Video can be prepared once so it plays back smoothly
+  *and* correctly split across both screens (see [Video modes](#video-modes)).
+- **Motion options.** Static, slow Ken-Burns pan/zoom, looping video, or animated GIF.
+- **In-app GIF search** via GIPHY (bring your own free API key).
+- **Keeps running.** Helps exempt itself from battery optimization so aggressive
+  power managers don't stop the wallpaper in the background.
 
-Earlier revisions of this project assumed the Thor was a portrait book-style
-device (like a closed-book DS) based on its spec sheet, and built a rotation
-"fix" around that assumption when the diagnostic numbers came back landscape
-(1920×1080 / 1240×1080). A reference photo of the actual running device
-settled it: the Thor is used **landscape, Switch-style** - top screen above,
-wider-than-tall bottom screen below flanked by the sticks/D-pad/buttons -
-and those landscape numbers were correct all along. The rotation logic has
-been corrected accordingly; the **Rotate Compensation 90°** control under
-"Orientation Fix" is kept only as a manual escape hatch (defaults to 0°, no
-effect) in case a future firmware update or different Thor variant ever
-needs it.
+### First run
 
-If **Show Screen Info** ever reports only one display instead of two, that's
-a different, unfixable-in-software situation: the per-screen split has to
-happen at the OS/launcher level, not in this app — use **Export Split
-Images** and assign each PNG manually through whatever per-screen picker the
-Thor's Settings app offers instead.
+On first launch a short walkthrough explains the basics. You can skip it; it
+won't show again. After that the home screen is a menu of tiles:
 
-## Searching for GIFs online
-**Search GIFs Online** uses GIPHY's public API. You'll need your own free
-API key (developers.giphy.com → Create an App → select "API"; the free beta
-key is rate-limited to 100 calls/hour, plenty for personal use) — the app
-prompts for it the first time and links straight to the signup page. Note:
-Tenor (Google's GIF API) stopped issuing new developer keys as of January
-2026, which is why this uses GIPHY instead.
+| Tile | What it's for |
+|------|---------------|
+| **Source** | Pick a photo, GIF, or video, or search GIFs online |
+| **Screen Fit** | How the image is split/cropped between the two screens |
+| **Motion** | Static, Ken Burns, video, or GIF — plus video smoothness |
+| **Keep Running** | Battery-optimization exemption so it survives in the background |
+| **Advanced** | Export split images, screen diagnostics, debug report, rotation fix |
 
-## Background behavior
-The wallpaper Engine is a genuine Android system service once applied — it
-keeps running whether or not the app is open, with no extra code needed for
-that. The **Keep Running in Background** button under "Background & Power"
-exists for a different, real problem: some phone makers' battery managers
-kill backgrounded app processes aggressively, which can affect this too.
-Requesting exemption from battery optimization is the one thing an app is
-actually allowed to do about that.
+Tap **Set as Live Wallpaper** to apply.
 
-## Why your settings kept resetting on every rebuild
-GitHub Actions runners don't persist a debug signing key between runs, so
-every fresh build was signed with a brand-new random key. Android treats a
-differently-signed APK as a different app and refuses to install it over the
-existing one, forcing an uninstall first — which wipes all your saved data
-(picked image, mode, gap setting, etc.) every single time. This repo now
-includes a checked-in `app/keystore/debug.keystore` that every build uses,
-so from here on, rebuilds upgrade in place instead of resetting anything.
-**One more uninstall of the current app is needed to make the switch**, but
-that's the last one — every build after this uses the same key.
+### Video modes
 
-## How to use it once installed
-1. Open **ThorPaper**, pick an image.
-2. Drag the **hinge gap** slider until the art lines up across the hinge in
-   the live preview.
-3. Pick **Slow pan/zoom**, **Static**, or **Looping video**.
-4. Tap **Set as Live Wallpaper** → confirm in the system dialog.
+Video on a dual-screen device is a genuine tradeoff. ThorPaper gives you three paths:
 
-If the bottom screen doesn't pick up the wallpaper (see caveat below), tap
-**Export Split Images** instead, then assign `top_screen.png` /
-`bottom_screen.png` manually through the system wallpaper picker for each
-screen, if the Thor's launcher offers that (AYN's launcher supports basic
-dual-screen wallpaper assignment through its Settings, based on public
-reviews of the device).
+1. **Prepared (recommended).** When you pick a video, choose **Prepare it**.
+   ThorPaper crops the video into one file per screen *once* (a short one-time
+   processing step), then plays each with a normal media player — **smooth and
+   split**. Lightest on battery during playback.
+2. **Smooth (Motion → Smooth toggle).** Plays the original video at full
+   framerate but shows the same full frame on both screens (not a true split).
+3. **Split fallback (choppy).** If you don't prepare the video, it's shown as a
+   frame-sampled slideshow — correctly split but not smooth. The **smoothness**
+   setting (Low/Medium/High) trades memory for more frames.
 
-## The one real technical unknown, stated plainly
-Android has a documented flag, `android:supportsMultipleDisplays="true"`,
-that tells the system "this live wallpaper knows how to render a different,
-correctly-sized image per physical display," and the framework then creates
-one `Engine` instance per display automatically. This app declares that flag
-and implements it properly — each `Engine` asks `getDisplayContext()` for its
-*own* display's real resolution and renders the right slice.
+### Troubleshooting
 
-What I can't verify without the device in hand is whether **AYN's specific
-custom launcher** actually requests a second wallpaper engine for the bottom
-screen at all — that's OEM launcher behavior, not something documented
-publicly, and Android's own docs note stock AOSP historically has no
-guaranteed per-screen wallpaper selection UI. That's exactly why the
-**Export** button exists as a no-dependency fallback: a plain PNG assigned
-through whatever per-screen wallpaper option the Thor's Settings app exposes
-will always work, live-wallpaper-engine support or not.
+- **Wallpaper is blank / didn't apply:** open ThorPaper → **Advanced → Create
+  Debug Report**. It saves a text file to your **Downloads** folder with device
+  info, screen details, your settings, and a recent event log. That file is the
+  fastest way to diagnose an issue.
+- **Split looks wrong / sideways:** **Advanced → Show Screen Info** reports what
+  Android sees for each display. If it shows only one display, per-screen
+  splitting has to happen at the OS level — use **Export Split Images** instead
+  and set each PNG per screen through the system picker. The **Rotate
+  Compensation** control is a manual escape hatch if art is rotated.
+- **Settings reset after an update:** shouldn't happen anymore — the app ships a
+  stable debug signing key so rebuilds upgrade in place. Switching *to* that key
+  the first time needs one uninstall.
 
-## What's "smart" about the split
-- **Auto-detects real resolution** of every active display at draw time via
-  `DisplayManager` — not hardcoded, so it keeps working if AYN ships a Thor
-  variant with different panel sizes.
-- **Continuous crop across the hinge**: the source image is scaled to fill one
-  virtual canvas sized `combined width × (screen heights + gap)`, then sliced,
-  so art lines up top-to-bottom instead of each screen getting an independent,
-  misaligned center-crop.
-- **Adjustable hinge-gap compensation** since the Thor is a clamshell with a
-  real physical gap, unlike a foldable's continuous panel.
-- **Ken Burns motion**, phase-locked across both screens from a shared clock
-  stored in `SharedPreferences`, so the slow pan/zoom feels like one camera
-  move spanning both panels rather than two engines drifting out of sync.
-- **Independent mode** if you'd rather run two unrelated images.
-- **Video mode**: loops an MP4 per screen with playback position aligned to
-  that same shared clock. Note: video is filled/stretched to each screen
-  independently (no seamless cross-hinge crop for video — that would need a
-  full GPU transcode pipeline) — pick a source near 1920×1080 or 1240×1080
-  for the least distortion, the same tradeoff real Wallpaper Engine makes for
-  multi-monitor video wallpapers.
-- **Animated GIF mode**: decodes with Android's built-in `ImageDecoder` (API
-  28+, no extra library), same per-screen-independent tradeoff as video.
+---
 
-## Project layout
-```
-app/src/main/java/com/thor/smartwall/
-  MainActivity.kt                  – picker UI, live dual-screen preview, export
-  SmartSplitWallpaperService.kt    – the actual live wallpaper (one Engine per display)
-  SplitEngine.kt                   – the crop/scale math, unit-testable, no Android deps beyond Bitmap
-  ScreenSpec.kt                    – runtime display detection
-  Prefs.kt                         – shared settings between the activity and the engine
-```
+## For developers
+
+### What it is
+
+A single-module Android app (Kotlin) whose core is a
+`WallpaperService.Engine` that renders a different, correctly-cropped view of one
+source onto each physical display the Thor exposes.
+
+### Architecture
+
+| File | Responsibility |
+|------|----------------|
+| `MainActivity.kt` | The settings/home UI: tile navigation, pickers, live preview, apply, onboarding, debug report. |
+| `SmartSplitWallpaperService.kt` | The `WallpaperService.Engine`. One engine instance per display; resolves which screen it's on via `getDisplayContext()` and renders that screen's crop. Handles static / Ken Burns / GIF / all video paths, screen-on/off + visibility gating. |
+| `SplitEngine.kt` | Pure crop math. Turns one source bitmap into a per-screen crop (continuous-across-the-hinge or independent per screen). |
+| `ScreenSpec.kt` | `DisplayDetector.findScreens()` — enumerates active displays via `DisplayManager` and orders them top→bottom. |
+| `VideoSplitTranscoder.kt` | One-time pre-crop of a source video into per-screen MP4s (the "Prepared" video path). |
+| `Prefs.kt` | Typed `SharedPreferences` wrapper (Context extension properties). |
+| `DebugLog.kt` | Lightweight in-memory + file event log for field diagnostics. |
+| `DebugReport.kt` | Assembles the user-generatable debug report and writes it to Downloads. |
+| `GifSearchActivity.kt` | In-app GIPHY search + download. |
+
+### How the split works
+
+`DisplayManager` reports the Thor as two displays (`id=0` 1920×1080 top, `id=4`
+1240×1080 bottom). The wallpaper framework creates one `Engine` per display;
+each engine uses its per-display `Context` to learn which screen it is, then asks
+`SplitEngine` for that screen's crop of the shared source. Playback across the
+two engines is phase-locked to a shared epoch so motion stays in sync.
+
+> **Note on the Thor's orientation:** the panels are used landscape (Switch
+> style), and `DisplayManager`'s reported dimensions are already correct — an
+> earlier assumption that they were portrait-rotated was wrong and has been
+> removed. The manual rotation override remains only as an escape hatch.
+
+### Dependencies
+
+All resolved from Google's Maven and Maven Central:
+
+| Dependency | Version | Why |
+|------------|---------|-----|
+| `androidx.core:core-ktx` | 1.13.1 | Kotlin extensions |
+| `androidx.appcompat:appcompat` | 1.7.0 | `AppCompatActivity`, dialogs |
+| `com.google.android.material:material` | 1.12.0 | Material 3 theme, switches, button toggle group |
+| `androidx.activity:activity-ktx` | 1.9.1 | `OnBackPressedDispatcher` |
+| `androidx.constraintlayout:constraintlayout` | 2.1.4 | Layout |
+| `com.otaliastudios:transcoder` | 0.11.2 | Hardware-accelerated video cropping for the "Prepared" video path (MediaCodec-based, no FFmpeg). Apache-2.0. |
+
+No native code, no FFmpeg, no server. Everything runs on-device.
+
+### Build configuration
+
+- `minSdk = 30` — needs `WallpaperService.Engine#getDisplayContext()` (API 29)
+  and `Context#getDisplay()` (API 30). The Thor runs Android 13 (API 33).
+- `targetSdk = 34`, `compileSdk = 34`, JDK 17, view binding on.
+- A **debug keystore is checked into `app/keystore/`** on purpose so every build
+  (CI or local) is signed identically and upgrades in place. It's debug-only and
+  carries no security value.
+
+### Permissions
+
+`READ_MEDIA_IMAGES`, `READ_MEDIA_VIDEO` (and `READ_EXTERNAL_STORAGE` capped at
+API 32) for picking media; `INTERNET` for GIPHY search;
+`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` for background survival. No location,
+camera, contacts, or write-storage permissions. `allowBackup` is disabled.
+
+### Building
+
+**Option A — Android Studio (recommended)**
+1. Install [Android Studio](https://developer.android.com/studio).
+2. `File → Open` → select the `ThorSmartWall` folder; let Gradle sync (it
+   downloads the SDK/build-tools automatically).
+3. Run on a connected Thor (USB debugging) or `Build → Build APK(s)` and grab
+   `app/build/outputs/apk/debug/app-debug.apk`.
+
+**Option B — GitHub Actions (no local toolchain)**
+The repo includes `.github/workflows/build-apk.yml`. Push the project to a
+GitHub repo (the web "Add file → Upload files" drag-drop works) and the
+**Actions** tab builds `app-debug.apk` as a downloadable artifact.
+
+> The hidden `.github` folder can be skipped by macOS Finder drag-drop. If the
+> workflow doesn't appear, create it manually via GitHub's web editor.
+
+### Known constraints
+
+- **Prepared video uses independent per-screen crops** (Smart Fit style), not a
+  continuous-across-the-hinge split — a consequence of cropping two files
+  separately.
+- **Some video codecs can't be re-encoded** on a given device; preparation fails
+  gracefully with a message and the choppy/smooth paths remain available.
+- **Per-screen live wallpaper depends on the launcher** handing the service a
+  second display. If a device exposes only one display, use Export Split Images.
+
+### License
+
+Personal project. The bundled Transcoder library is Apache-2.0.

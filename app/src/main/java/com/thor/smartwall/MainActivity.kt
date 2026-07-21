@@ -25,6 +25,7 @@ import com.thor.smartwall.Prefs.videoSmoothMode
 import com.thor.smartwall.Prefs.videoSmoothness
 import com.thor.smartwall.Prefs.splitVideoTopPath
 import com.thor.smartwall.Prefs.splitVideoBottomPath
+import com.thor.smartwall.Prefs.onboardingDone
 import com.thor.smartwall.Prefs.videoUri
 import com.thor.smartwall.databinding.ActivityMainBinding
 import java.io.File
@@ -67,6 +68,59 @@ class MainActivity : AppCompatActivity() {
 
     private fun stopPreviewVideoLoop() {
         previewVideoHandler.removeCallbacks(previewVideoTick)
+    }
+
+    // ---- First-run onboarding ----
+    private data class OnboardStep(val icon: Int, val title: Int, val body: Int, val tint: Int)
+
+    private val onboardSteps by lazy {
+        listOf(
+            OnboardStep(R.drawable.ic_launcher_foreground, R.string.onboard_1_title, R.string.onboard_1_body, R.color.accent),
+            OnboardStep(R.drawable.ic_cat_source, R.string.onboard_2_title, R.string.onboard_2_body, R.color.cat_source),
+            OnboardStep(R.drawable.ic_cat_motion, R.string.onboard_3_title, R.string.onboard_3_body, R.color.cat_motion),
+            OnboardStep(R.drawable.ic_cat_power, R.string.onboard_4_title, R.string.onboard_4_body, R.color.cat_power)
+        )
+    }
+    private var onboardIndex = 0
+
+    private fun maybeShowOnboarding() {
+        if (onboardingDone) {
+            binding.onboardingRoot.onboardingOverlay.visibility = android.view.View.GONE
+            return
+        }
+        onboardIndex = 0
+        renderOnboardStep()
+        binding.onboardingRoot.onboardingOverlay.visibility = android.view.View.VISIBLE
+    }
+
+    private fun renderOnboardStep() {
+        val ob = binding.onboardingRoot
+        val step = onboardSteps[onboardIndex]
+        ob.onboardIcon.setImageResource(step.icon)
+        ob.onboardIcon.backgroundTintList = androidx.core.content.ContextCompat.getColorStateList(this, step.tint)
+        ob.onboardTitle.setText(step.title)
+        ob.onboardBody.setText(step.body)
+        ob.onboardNext.setText(if (onboardIndex == onboardSteps.lastIndex) R.string.onboard_start else R.string.onboard_next)
+
+        val dots = listOf(ob.dot0, ob.dot1, ob.dot2, ob.dot3)
+        dots.forEachIndexed { i, dot ->
+            val color = if (i == onboardIndex) R.color.accent else R.color.tile_border
+            dot.backgroundTintList = androidx.core.content.ContextCompat.getColorStateList(this, color)
+        }
+    }
+
+    private fun advanceOnboarding() {
+        if (onboardIndex == onboardSteps.lastIndex) {
+            finishOnboarding()
+        } else {
+            onboardIndex++
+            renderOnboardStep()
+        }
+    }
+
+    private fun finishOnboarding() {
+        onboardingDone = true
+        binding.onboardingRoot.onboardingOverlay.visibility = android.view.View.GONE
     }
 
     // Live status-bar clock, 3DS-style. Ticks while the screen is on the settings UI.
@@ -244,17 +298,23 @@ class MainActivity : AppCompatActivity() {
         // System back returns to the home menu before exiting the app
         onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (binding.flipper.displayedChild != homeIndex) {
-                    showScreen(homeIndex)
-                } else {
-                    isEnabled = false
-                    onBackPressedDispatcher.onBackPressed()
+                when {
+                    binding.onboardingRoot.onboardingOverlay.visibility == android.view.View.VISIBLE -> finishOnboarding()
+                    binding.flipper.displayedChild != homeIndex -> showScreen(homeIndex)
+                    else -> {
+                        isEnabled = false
+                        onBackPressedDispatcher.onBackPressed()
+                    }
                 }
             }
         })
 
         showScreen(homeIndex)
         renderPreview()
+
+        binding.onboardingRoot.onboardNext.setOnClickListener { advanceOnboarding() }
+        binding.onboardingRoot.onboardSkip.setOnClickListener { finishOnboarding() }
+        maybeShowOnboarding()
     }
 
     override fun onResume() {

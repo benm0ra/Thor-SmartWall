@@ -78,6 +78,17 @@
     <string name="export_failed">Export failed</string>
     <string name="exported_to">Saved to %1$s</string>
     <string name="video_loaded">Video loaded</string>
+    <string name="onboard_next">Next</string>
+    <string name="onboard_skip">Skip</string>
+    <string name="onboard_start">Get started</string>
+    <string name="onboard_1_title">Welcome to ThorPaper</string>
+    <string name="onboard_1_body">Set one photo, GIF, or video as a live wallpaper that spans both of your Thor\'s screens — lined up across the hinge instead of duplicated.</string>
+    <string name="onboard_2_title">Pick your wallpaper</string>
+    <string name="onboard_2_body">Tap Source, then choose any photo, GIF, or video. ThorPaper detects the type and sets things up automatically. The little Thor at the top previews how it\'ll look.</string>
+    <string name="onboard_3_title">Make videos smooth</string>
+    <string name="onboard_3_body">When you pick a video, choose Prepare it. ThorPaper crops it for each screen once, so it plays back smooth and split — not choppy.</string>
+    <string name="onboard_4_title">Set it and keep it running</string>
+    <string name="onboard_4_body">Tap Set as Live Wallpaper to apply. If your device is aggressive about closing apps, use Keep Running so it doesn\'t get stopped in the background.</string>
     <string name="presplit_title">Make it smooth?</string>
     <string name="presplit_message">This video can be prepared for smooth, full-speed playback that\'s still split across both screens. It takes a little processing now (usually under a minute), done once. If you skip it, the video still works but motion on the split will be choppier.</string>
     <string name="presplit_confirm">Prepare it</string>
