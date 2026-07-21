@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 3DS-inspired palette: soft cool-gray surfaces, friendly coral accent, slate ink -->
+    <color name="bg_top">#E8EDF2</color>
+    <color name="bg_bottom">#D4DCE6</color>
+    <color name="tile">#FFFFFF</color>
+    <color name="tile_border">#C3CCD9</color>
+    <color name="tile_pressed">#F0F3F7</color>
+    <color name="ink">#2B3440</color>
+    <color name="ink_soft">#66727F</color>
+    <color name="accent">#F0574F</color>
+    <color name="accent_dark">#C8443D</color>
+    <color name="accent_soft">#FCE7E5</color>
+    <color name="statusbar">#F5F7FA</color>
+    <color name="screen_bezel">#1C2028</color>
+    <color name="screen_void">#000000</color>
+
+    <!-- Tile accent hues, one per settings category -->
+    <color name="cat_source">#F0574F</color>
+    <color name="cat_fit">#2FA4B8</color>
+    <color name="cat_motion">#E8A317</color>
+    <color name="cat_power">#5AAE6B</color>
+    <color name="cat_advanced">#8A7CD8</color>
+</resources>

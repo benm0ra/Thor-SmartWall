@@ -31,6 +31,8 @@
     <string name="section_motion">Motion</string>
     <string name="section_background">Background &amp; Power</string>
     <string name="section_apply">Apply</string>
+    <string name="section_advanced">Advanced</string>
+    <string name="preview_empty_hint">Pick a wallpaper below to see it here</string>
     <string name="section_orientation_fix">Orientation Fix</string>
     <string name="rotation_fix_hint">The Thor\'s screens are used landscape and the app already accounts for that correctly - this should stay at 0° for normal use. It\'s here as a manual escape hatch only: if a firmware update or a different Thor variant ever needs a rotation nudge, cycle this and re-apply until it looks right.</string>
     <string name="rotate_90_button">Rotate Compensation 90°</string>

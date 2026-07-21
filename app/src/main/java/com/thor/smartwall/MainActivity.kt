@@ -42,6 +42,16 @@ class MainActivity : AppCompatActivity() {
     private val previewHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val previewRunnable = Runnable { renderPreviewNow() }
 
+    // Live status-bar clock, 3DS-style. Ticks while the screen is on the settings UI.
+    private val clockHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val clockFormat = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault())
+    private val clockRunnable = object : Runnable {
+        override fun run() {
+            binding.statusClock.text = clockFormat.format(java.util.Date())
+            clockHandler.postDelayed(this, 15_000L)
+        }
+    }
+
     /** Debounced: coalesces rapid-fire calls (e.g. slider drag) into one redraw ~60ms later. */
     private fun renderPreview() {
         previewHandler.removeCallbacks(previewRunnable)
@@ -160,6 +170,13 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         restoreUiFromPrefs()
+        clockHandler.removeCallbacks(clockRunnable)
+        clockHandler.post(clockRunnable)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        clockHandler.removeCallbacks(clockRunnable)
     }
 
     private fun updateRotationLabel() {
@@ -225,11 +242,22 @@ class MainActivity : AppCompatActivity() {
 
     /** Draws a live simulation of the Thor's two screens reflecting whatever is actually picked right now. */
     private fun renderPreviewNow() {
+        updateEmptyHint()
         when (mode) {
             WallMode.VIDEO -> renderVideoPreview()
             WallMode.GIF -> renderGifPreview()
             else -> renderImagePreview()
         }
+    }
+
+    /** Shows the "pick something" nudge only when the current mode has no media chosen yet. */
+    private fun updateEmptyHint() {
+        val hasMedia = when (mode) {
+            WallMode.VIDEO -> videoUri != null
+            WallMode.GIF -> gifUri != null
+            else -> imageUri != null
+        }
+        binding.previewEmptyHint.visibility = if (hasMedia) android.view.View.GONE else android.view.View.VISIBLE
     }
 
     private fun renderImagePreview() {

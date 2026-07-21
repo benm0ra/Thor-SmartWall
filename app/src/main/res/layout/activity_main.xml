@@ -1,222 +1,247 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#0D0F13"
-    android:scrollbars="none">
+    android:orientation="vertical"
+    android:background="@drawable/bg_gradient">
 
+    <!-- 3DS-style top status bar: app identity left, live clock right -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="18dp">
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/statusbar_bg"
+        android:paddingStart="18dp"
+        android:paddingEnd="18dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp"
+        android:elevation="4dp">
 
-        <!-- Header -->
+        <ImageView
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+            android:src="@drawable/ic_launcher_foreground"
+            android:background="@drawable/cat_chip"
+            android:backgroundTint="@color/accent_soft"
+            android:contentDescription="@string/app_name" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="10dp"
+            android:text="@string/app_name"
+            android:textColor="@color/ink"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/statusClock"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/ink_soft"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            tools:ignore="MissingConstraints" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:scrollbars="none"
+        android:clipToPadding="false"
+        android:paddingBottom="24dp">
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginBottom="18dp">
-            <View
-                android:layout_width="6dp"
-                android:layout_height="18dp"
-                android:background="#7C4DFF" />
-            <View
-                android:layout_width="6dp"
-                android:layout_height="18dp"
-                android:layout_marginStart="2dp"
-                android:background="#FFCC33" />
+            android:orientation="vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp">
+
+            <!-- Hero: the Thor shown like it's displaying its own home screen -->
+            <FrameLayout
+                android:layout_width="200dp"
+                android:layout_height="240dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="18dp"
+                android:background="@drawable/thor_device_shell">
+
+                <ImageView
+                    android:id="@+id/previewTop"
+                    android:layout_width="184dp"
+                    android:layout_height="106dp"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginTop="6dp"
+                    android:background="@drawable/rounded_screen_bg"
+                    android:clipToOutline="true"
+                    android:scaleType="centerCrop"
+                    android:contentDescription="@string/preview_top_desc" />
+
+                <ImageView
+                    android:id="@+id/previewBottom"
+                    android:layout_width="100dp"
+                    android:layout_height="87dp"
+                    android:layout_marginStart="50dp"
+                    android:layout_marginTop="142dp"
+                    android:background="@drawable/rounded_screen_bg"
+                    android:clipToOutline="true"
+                    android:scaleType="centerCrop"
+                    android:contentDescription="@string/preview_bottom_desc" />
+            </FrameLayout>
+
             <TextView
+                android:id="@+id/previewEmptyHint"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="10dp"
-                android:text="@string/app_name"
-                android:textColor="#FFFFFF"
-                android:textSize="24sp"
-                android:textStyle="bold" />
-        </LinearLayout>
-
-        <!-- Hero: the Thor silhouette (landscape, Switch-style) with the live split preview inside it -->
-        <FrameLayout
-            android:layout_width="200dp"
-            android:layout_height="240dp"
-            android:layout_gravity="center_horizontal"
-            android:background="@drawable/thor_device_shell">
-
-            <ImageView
-                android:id="@+id/previewTop"
-                android:layout_width="184dp"
-                android:layout_height="106dp"
-                android:layout_marginStart="8dp"
-                android:layout_marginTop="6dp"
-                android:background="@drawable/rounded_screen_bg"
-                android:clipToOutline="true"
-                android:scaleType="centerCrop"
-                android:contentDescription="@string/preview_top_desc" />
-
-            <ImageView
-                android:id="@+id/previewBottom"
-                android:layout_width="100dp"
-                android:layout_height="87dp"
-                android:layout_marginStart="50dp"
-                android:layout_marginTop="142dp"
-                android:background="@drawable/rounded_screen_bg"
-                android:clipToOutline="true"
-                android:scaleType="centerCrop"
-                android:contentDescription="@string/preview_bottom_desc" />
-        </FrameLayout>
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="22dp"
-            android:text="@string/preview_scale_note"
-            android:textColor="#5A6070"
-            android:textSize="11sp" />
-
-        <!-- Card: Wallpaper Source -->
-        <LinearLayout style="@style/SectionRow">
-            <View style="@style/SectionDot" android:backgroundTint="#7C4DFF" />
-            <TextView style="@style/SectionLabel" android:text="@string/section_source" />
-        </LinearLayout>
-        <LinearLayout style="@style/Card">
-            <Button style="@style/CardButton" android:id="@+id/btnPickWallpaper" android:text="@string/pick_wallpaper_unified" />
-            <TextView style="@style/CardHint" android:layout_marginTop="4dp" android:text="@string/pick_wallpaper_hint" />
-            <Button style="@style/CardButton" android:id="@+id/btnSearchGifs" android:text="@string/search_gifs_online" />
-        </LinearLayout>
-
-        <!-- Card: Screen Fit -->
-        <LinearLayout style="@style/SectionRow">
-            <View style="@style/SectionDot" android:backgroundTint="#4DD0E1" />
-            <TextView style="@style/SectionLabel" android:text="@string/section_fit" />
-        </LinearLayout>
-        <LinearLayout style="@style/Card">
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/switchIndependent"
-                style="@style/CardSwitch"
-                android:text="@string/smart_fit_mode"
-                android:checked="true" />
-            <TextView style="@style/CardHint" android:text="@string/smart_fit_hint" />
-
-            <Button
-                style="@style/CardButton"
-                android:id="@+id/btnPickSecondary"
-                android:layout_marginTop="10dp"
-                android:enabled="true"
-                android:text="@string/pick_bottom_image" />
-
-            <View style="@style/CardDivider" />
-
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/switchVertical"
-                style="@style/CardSwitch"
-                android:checked="true"
-                android:text="@string/stacked_vertically" />
-
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/switchSwap"
-                style="@style/CardSwitch"
-                android:text="@string/swap_screen_order" />
-
-            <TextView
-                style="@style/CardLabel"
-                android:id="@+id/labelHingeGap"
-                android:layout_marginTop="10dp"
-                android:text="@string/hinge_gap" />
-            <SeekBar
-                android:id="@+id/seekGap"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
-        </LinearLayout>
-
-        <!-- Card: Motion -->
-        <LinearLayout style="@style/SectionRow">
-            <View style="@style/SectionDot" android:backgroundTint="#FFCC33" />
-            <TextView style="@style/SectionLabel" android:text="@string/section_motion" />
-        </LinearLayout>
-        <LinearLayout style="@style/Card">
-            <RadioGroup
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical">
-
-                <RadioButton style="@style/CardRadio" android:id="@+id/radioKenBurns" android:checked="true" android:text="@string/mode_ken_burns" />
-                <RadioButton style="@style/CardRadio" android:id="@+id/radioStatic" android:text="@string/mode_static" />
-                <RadioButton style="@style/CardRadio" android:id="@+id/radioVideo" android:text="@string/mode_video" />
-                <RadioButton style="@style/CardRadio" android:id="@+id/radioGif" android:text="@string/mode_gif" />
-            </RadioGroup>
-
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/switchVideoSmooth"
-                style="@style/CardSwitch"
-                android:layout_marginStart="24dp"
-                android:layout_marginTop="6dp"
-                android:text="@string/video_smooth_toggle" />
-            <TextView
-                style="@style/CardHint"
-                android:layout_marginStart="24dp"
-                android:text="@string/video_smooth_hint" />
-        </LinearLayout>
-
-        <!-- Card: Orientation Fix -->
-        <LinearLayout style="@style/SectionRow">
-            <View style="@style/SectionDot" android:backgroundTint="#FF6EC7" />
-            <TextView style="@style/SectionLabel" android:text="@string/section_orientation_fix" />
-        </LinearLayout>
-        <LinearLayout style="@style/Card">
-            <TextView style="@style/CardHint" android:text="@string/rotation_fix_hint" />
-            <TextView
-                style="@style/CardLabel"
-                android:id="@+id/labelRotationValue"
+                android:layout_gravity="center_horizontal"
                 android:layout_marginTop="8dp"
-                android:textStyle="bold" />
-            <Button
-                style="@style/CardButton"
-                android:id="@+id/btnRotationFix"
-                android:text="@string/rotate_90_button" />
-        </LinearLayout>
+                android:text="@string/preview_empty_hint"
+                android:textColor="@color/ink_soft"
+                android:textSize="12sp" />
 
-        <!-- Card: Background & Power -->
-        <LinearLayout style="@style/SectionRow">
-            <View style="@style/SectionDot" android:backgroundTint="#66D19E" />
-            <TextView style="@style/SectionLabel" android:text="@string/section_background" />
-        </LinearLayout>
-        <LinearLayout style="@style/Card">
-            <TextView style="@style/CardHint" android:text="@string/background_explainer" />
-            <Button
-                style="@style/CardButton"
-                android:id="@+id/btnBatteryOptimization"
-                android:layout_marginTop="10dp"
-                android:text="@string/keep_running_background" />
-        </LinearLayout>
-
-        <!-- Card: Apply -->
-        <LinearLayout style="@style/SectionRow">
-            <View style="@style/SectionDot" android:backgroundTint="#FF6E6E" />
-            <TextView style="@style/SectionLabel" android:text="@string/section_apply" />
-        </LinearLayout>
-        <LinearLayout style="@style/Card">
+            <!-- Primary action lives up top, always reachable -->
             <Button
                 android:id="@+id/btnApplyLive"
                 android:layout_width="match_parent"
-                android:layout_height="52dp"
+                android:layout_height="56dp"
+                android:layout_marginTop="16dp"
                 android:background="@drawable/accent_button_bg"
                 android:textColor="#FFFFFF"
                 android:textStyle="bold"
+                android:textSize="17sp"
+                android:textAllCaps="false"
+                android:stateListAnimator="@null"
                 android:text="@string/apply_live_wallpaper" />
 
-            <Button style="@style/CardButton" android:id="@+id/btnExport" android:layout_marginTop="10dp" android:text="@string/export_split_images" />
-            <Button style="@style/CardButton" android:id="@+id/btnDiagnostics" android:text="@string/show_screen_info" />
+            <!-- Wallpaper Source -->
+            <LinearLayout style="@style/SectionRow">
+                <View android:layout_width="10dp" android:layout_height="10dp"
+                    android:background="@drawable/cat_chip" android:backgroundTint="@color/cat_source"
+                    android:layout_marginEnd="8dp" />
+                <TextView style="@style/SectionLabel" android:text="@string/section_source" />
+            </LinearLayout>
+            <LinearLayout style="@style/Tile">
+                <Button style="@style/TileButton" android:id="@+id/btnPickWallpaper" android:text="@string/pick_wallpaper_unified" />
+                <TextView style="@style/TileHint" android:layout_marginTop="6dp" android:text="@string/pick_wallpaper_hint" />
+                <Button style="@style/TileButton" android:id="@+id/btnSearchGifs" android:text="@string/search_gifs_online" />
+            </LinearLayout>
 
-            <TextView
-                style="@style/CardHint"
-                android:layout_marginTop="8dp"
-                android:text="@string/export_hint" />
+            <!-- Screen Fit -->
+            <LinearLayout style="@style/SectionRow">
+                <View android:layout_width="10dp" android:layout_height="10dp"
+                    android:background="@drawable/cat_chip" android:backgroundTint="@color/cat_fit"
+                    android:layout_marginEnd="8dp" />
+                <TextView style="@style/SectionLabel" android:text="@string/section_fit" />
+            </LinearLayout>
+            <LinearLayout style="@style/Tile">
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/switchIndependent"
+                    style="@style/TileSwitch"
+                    android:text="@string/smart_fit_mode"
+                    android:checked="true" />
+                <TextView style="@style/TileHint" android:text="@string/smart_fit_hint" />
+
+                <Button
+                    style="@style/TileButton"
+                    android:id="@+id/btnPickSecondary"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/pick_bottom_image" />
+
+                <View style="@style/TileDivider" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/switchVertical"
+                    style="@style/TileSwitch"
+                    android:checked="true"
+                    android:text="@string/stacked_vertically" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/switchSwap"
+                    style="@style/TileSwitch"
+                    android:text="@string/swap_screen_order" />
+
+                <TextView
+                    style="@style/TileLabel"
+                    android:id="@+id/labelHingeGap"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/hinge_gap" />
+                <SeekBar
+                    android:id="@+id/seekGap"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp" />
+            </LinearLayout>
+
+            <!-- Motion -->
+            <LinearLayout style="@style/SectionRow">
+                <View android:layout_width="10dp" android:layout_height="10dp"
+                    android:background="@drawable/cat_chip" android:backgroundTint="@color/cat_motion"
+                    android:layout_marginEnd="8dp" />
+                <TextView style="@style/SectionLabel" android:text="@string/section_motion" />
+            </LinearLayout>
+            <LinearLayout style="@style/Tile">
+                <RadioGroup
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+                    <RadioButton style="@style/TileRadio" android:id="@+id/radioKenBurns" android:checked="true" android:text="@string/mode_ken_burns" />
+                    <RadioButton style="@style/TileRadio" android:id="@+id/radioStatic" android:text="@string/mode_static" />
+                    <RadioButton style="@style/TileRadio" android:id="@+id/radioVideo" android:text="@string/mode_video" />
+                    <RadioButton style="@style/TileRadio" android:id="@+id/radioGif" android:text="@string/mode_gif" />
+                </RadioGroup>
+
+                <View style="@style/TileDivider" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/switchVideoSmooth"
+                    style="@style/TileSwitch"
+                    android:text="@string/video_smooth_toggle" />
+                <TextView style="@style/TileHint" android:text="@string/video_smooth_hint" />
+            </LinearLayout>
+
+            <!-- Keep It Running -->
+            <LinearLayout style="@style/SectionRow">
+                <View android:layout_width="10dp" android:layout_height="10dp"
+                    android:background="@drawable/cat_chip" android:backgroundTint="@color/cat_power"
+                    android:layout_marginEnd="8dp" />
+                <TextView style="@style/SectionLabel" android:text="@string/section_background" />
+            </LinearLayout>
+            <LinearLayout style="@style/Tile">
+                <TextView style="@style/TileHint" android:text="@string/background_explainer" />
+                <Button
+                    style="@style/TileButton"
+                    android:id="@+id/btnBatteryOptimization"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/keep_running_background" />
+            </LinearLayout>
+
+            <!-- Advanced (collapsed feel: export, diagnostics, rotation) -->
+            <LinearLayout style="@style/SectionRow">
+                <View android:layout_width="10dp" android:layout_height="10dp"
+                    android:background="@drawable/cat_chip" android:backgroundTint="@color/cat_advanced"
+                    android:layout_marginEnd="8dp" />
+                <TextView style="@style/SectionLabel" android:text="@string/section_advanced" />
+            </LinearLayout>
+            <LinearLayout style="@style/Tile">
+                <Button style="@style/TileButton" android:id="@+id/btnExport" android:layout_marginTop="0dp" android:text="@string/export_split_images" />
+                <Button style="@style/TileButton" android:id="@+id/btnDiagnostics" android:text="@string/show_screen_info" />
+                <TextView style="@style/TileHint" android:layout_marginTop="8dp" android:text="@string/export_hint" />
+
+                <View style="@style/TileDivider" />
+
+                <TextView style="@style/TileHint" android:text="@string/rotation_fix_hint" />
+                <TextView
+                    style="@style/TileLabel"
+                    android:id="@+id/labelRotationValue"
+                    android:layout_marginTop="6dp"
+                    android:textStyle="bold" />
+                <Button style="@style/TileButton" android:id="@+id/btnRotationFix" android:text="@string/rotate_90_button" />
+            </LinearLayout>
+
         </LinearLayout>
-
-    </LinearLayout>
-</ScrollView>
+    </ScrollView>
+</LinearLayout>
