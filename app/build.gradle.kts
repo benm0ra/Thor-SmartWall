@@ -7,6 +7,21 @@ android {
     namespace = "com.thor.smartwall"
     compileSdk = 34
 
+    signingConfigs {
+        getByName("debug") {
+            // Checked into the repo on purpose: without a stable debug key, a CI runner
+            // generates a fresh random one on every build, which makes every new APK look
+            // like a different app to Android and forces a full uninstall before installing
+            // the next one - silently wiping your saved image/settings on every single update.
+            // This keystore is debug-only, has no real security value, and exists purely so
+            // rebuilds upgrade in place instead of resetting your data every time.
+            storeFile = file("keystore/debug.keystore")
+            storePassword = "thorpaperdebug"
+            keyAlias = "thorpaperdebugkey"
+            keyPassword = "thorpaperdebug"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.thor.smartwall"
         // 30+ guarantees both WallpaperService.Engine#getDisplayContext() (added API 29)

@@ -65,6 +65,17 @@ kill backgrounded app processes aggressively, which can affect this too.
 Requesting exemption from battery optimization is the one thing an app is
 actually allowed to do about that.
 
+## Why your settings kept resetting on every rebuild
+GitHub Actions runners don't persist a debug signing key between runs, so
+every fresh build was signed with a brand-new random key. Android treats a
+differently-signed APK as a different app and refuses to install it over the
+existing one, forcing an uninstall first — which wipes all your saved data
+(picked image, mode, gap setting, etc.) every single time. This repo now
+includes a checked-in `app/keystore/debug.keystore` that every build uses,
+so from here on, rebuilds upgrade in place instead of resetting anything.
+**One more uninstall of the current app is needed to make the switch**, but
+that's the last one — every build after this uses the same key.
+
 ## How to use it once installed
 1. Open **ThorPaper**, pick an image.
 2. Drag the **hinge gap** slider until the art lines up across the hinge in
