@@ -8,6 +8,7 @@ import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.drawable.AnimatedImageDrawable
 import android.graphics.drawable.Drawable
+import android.content.Intent
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Handler
@@ -38,6 +39,7 @@ class SmartSplitWallpaperService : WallpaperService() {
 
         private val handler = Handler(Looper.getMainLooper())
         private var visible = false
+        private var screenOn = true
         private var mediaPlayer: MediaPlayer? = null
 
         // Everything below is resolved lazily once we know which display we're on.
@@ -65,14 +67,48 @@ class SmartSplitWallpaperService : WallpaperService() {
         private val drawRunnable = object : Runnable {
             override fun run() {
                 drawFrame()
-                if (visible) {
-                    handler.postDelayed(this, 33L) // ~30fps, plenty smooth for slow pan/zoom
+                if (shouldPlay()) {
+                    handler.postDelayed(this, 66L) // ~15fps: plenty smooth for a *slow* pan/zoom, half the cost of 30fps
                 }
+            }
+        }
+
+        // Belt-and-suspenders: onVisibilityChanged *should* fire false whenever the screen goes
+        // off, but OEM Android skins have a long history of being inconsistent about this, and a
+        // wallpaper that keeps animating (and re-decoding video/GIF frames) with the screen
+        // physically off is exactly the kind of thing that causes silent overnight battery drain.
+        // This listens for the real screen-power broadcast directly rather than trusting that.
+        private val screenReceiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: android.content.Context, intent: Intent) {
+                screenOn = intent.action != Intent.ACTION_SCREEN_OFF
+                updatePlaybackState()
+            }
+        }
+
+        private fun shouldPlay(): Boolean = visible && screenOn
+
+        /** Single source of truth for starting/stopping every animated thing this Engine owns. */
+        private fun updatePlaybackState() {
+            if (shouldPlay()) {
+                if (applicationContext.mode == WallMode.KEN_BURNS) {
+                    handler.removeCallbacks(drawRunnable)
+                    handler.post(drawRunnable)
+                }
+                try { mediaPlayer?.start() } catch (_: IllegalStateException) { /* not prepared yet - onPrepared will start it */ }
+                gifDrawable?.start()
+            } else {
+                handler.removeCallbacks(drawRunnable)
+                try { mediaPlayer?.pause() } catch (_: IllegalStateException) { /* not prepared yet, nothing to pause */ }
+                gifDrawable?.stop()
             }
         }
 
         override fun onCreate(surfaceHolder: SurfaceHolder) {
             super.onCreate(surfaceHolder)
+            val filter = android.content.IntentFilter(Intent.ACTION_SCREEN_OFF).apply {
+                addAction(Intent.ACTION_SCREEN_ON)
+            }
+            applicationContext.registerReceiver(screenReceiver, filter)
         }
 
         override fun onSurfaceCreated(holder: SurfaceHolder) {
@@ -89,16 +125,7 @@ class SmartSplitWallpaperService : WallpaperService() {
 
         override fun onVisibilityChanged(isVisible: Boolean) {
             visible = isVisible
-            if (isVisible) {
-                handler.removeCallbacks(drawRunnable)
-                handler.post(drawRunnable)
-                mediaPlayer?.start()
-                gifDrawable?.start()
-            } else {
-                handler.removeCallbacks(drawRunnable)
-                mediaPlayer?.pause()
-                gifDrawable?.stop()
-            }
+            updatePlaybackState()
         }
 
         override fun onSurfaceDestroyed(holder: SurfaceHolder) {
@@ -117,6 +144,11 @@ class SmartSplitWallpaperService : WallpaperService() {
             mediaPlayer = null
             gifDrawable?.callback = null
             gifDrawable = null
+            try {
+                applicationContext.unregisterReceiver(screenReceiver)
+            } catch (_: IllegalArgumentException) {
+                // Already unregistered - fine.
+            }
         }
 
         /** Figures out which physical display this Engine instance belongs to, using the
@@ -169,6 +201,14 @@ class SmartSplitWallpaperService : WallpaperService() {
                 null
             }
             drawFrame()
+            // STATIC has nothing to animate - draw once above and stop, don't burn battery
+            // redrawing an unchanging bitmap 15x/sec. Only KEN_BURNS needs the ongoing loop.
+            if (ctx.mode == WallMode.KEN_BURNS && shouldPlay()) {
+                handler.removeCallbacks(drawRunnable)
+                handler.post(drawRunnable)
+            } else {
+                handler.removeCallbacks(drawRunnable)
+            }
         }
 
         private fun setupVideo(holder: SurfaceHolder) {
@@ -192,7 +232,7 @@ class SmartSplitWallpaperService : WallpaperService() {
                     val duration = it.duration.takeIf { d -> d > 0 } ?: 1
                     val seekTo = (elapsed % duration).toInt()
                     it.seekTo(seekTo)
-                    if (visible) it.start()
+                    if (shouldPlay()) it.start()
                 }
                 mp.prepareAsync()
                 mediaPlayer = mp
@@ -224,7 +264,7 @@ class SmartSplitWallpaperService : WallpaperService() {
                     drawable.repeatCount = AnimatedImageDrawable.REPEAT_INFINITE
                     drawable.callback = gifCallback
                     gifDrawable = drawable
-                    if (visible) drawable.start()
+                    if (shouldPlay()) drawable.start()
                 }
             } catch (t: Throwable) {
                 android.util.Log.e("ThorSmartWall", "Failed to load GIF from $uriStr", t)
