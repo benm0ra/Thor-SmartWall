@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  supportsMultipleDisplays=true is the whole trick: it tells Android's
+  WallpaperManager that this service knows how to render a *different*
+  correctly-sized image per physical display. Without it, the system just
+  mirrors the primary-display wallpaper (or falls back to the default one)
+  on the Thor's second screen instead of asking us for it.
+-->
+<wallpaper xmlns:android="http://schemas.android.com/apk/res/android"
+    android:settingsActivity="com.thor.smartwall.MainActivity"
+    android:supportsMultipleDisplays="true"
+    android:thumbnail="@drawable/wallpaper_thumb"
+    android:description="@string/wallpaper_description" />

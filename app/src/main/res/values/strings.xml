@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Thor Smart Split</string>
+    <string name="tagline">One image or video, correctly split across both Thor screens.</string>
+    <string name="wallpaper_description">Splits one image continuously across the Thor\'s two screens, with an optional slow Ken Burns pan/zoom.</string>
+    <string name="pick_image">Choose Image</string>
+    <string name="pick_video">Choose Video (loops per-screen)</string>
+    <string name="pick_bottom_image">Choose Bottom-Screen Image</string>
+    <string name="independent_mode">Independent mode (different image per screen)</string>
+    <string name="stacked_vertically">Screens stacked vertically (Thor default)</string>
+    <string name="swap_screen_order">Swap screen order (if it comes out backwards)</string>
+    <string name="hinge_gap">Hinge gap compensation</string>
+    <string name="mode_ken_burns">Slow pan/zoom (Ken Burns)</string>
+    <string name="mode_static">Static image</string>
+    <string name="mode_video">Looping video</string>
+    <string name="apply_live_wallpaper">Set as Live Wallpaper</string>
+    <string name="export_split_images">Export Split Images (PNG)</string>
+    <string name="export_hint">If the Thor\'s launcher doesn\'t offer the second screen a live wallpaper of its own, use Export, then assign each PNG manually through the system wallpaper picker for that screen.</string>
+    <string name="preview_top_desc">Top screen preview</string>
+    <string name="preview_bottom_desc">Bottom screen preview</string>
+    <string name="could_not_load_image">Could not load that image</string>
+    <string name="pick_image_first">Pick an image first</string>
+    <string name="export_failed">Export failed</string>
+    <string name="exported_to">Saved to %1$s</string>
+    <string name="video_loaded">Video loaded</string>
+    <string name="open_wallpaper_picker_manually">Open Settings ▸ Wallpaper and pick Thor Smart Split manually</string>
+</resources>
