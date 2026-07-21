@@ -5,6 +5,19 @@ import android.content.SharedPreferences
 
 enum class WallMode { STATIC, KEN_BURNS, VIDEO, GIF }
 
+/**
+ * Split-video smoothness, expressed the way a person thinks about it (Low/Medium/High) rather
+ * than as raw frame counts. Each tier bundles a frame count and a per-frame sample resolution,
+ * because those two together are what actually determine both smoothness AND memory use - the
+ * two things a user is really trading off. Higher = smoother motion but more memory and a longer
+ * one-time processing pass when you first apply the wallpaper.
+ */
+enum class VideoSmoothness(val frameCount: Int, val sampleWidth: Int, val sampleHeight: Int) {
+    LOW(16, 640, 360),
+    MEDIUM(32, 640, 360),
+    HIGH(48, 854, 480)
+}
+
 /** Central config, read by both MainActivity (writer) and the wallpaper Engine (reader). */
 object Prefs {
     private const val FILE = "thor_smartwall_prefs"
@@ -22,6 +35,7 @@ object Prefs {
     private const val KEY_ORIENTATION = "orientation"
     private const val KEY_ROTATION_OVERRIDE = "rotation_override_degrees"
     private const val KEY_VIDEO_SMOOTH = "video_smooth_mode"
+    private const val KEY_VIDEO_SMOOTHNESS = "video_smoothness_level"
 
     private fun sp(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -74,6 +88,13 @@ object Prefs {
     var Context.videoSmoothMode: Boolean
         get() = sp(this).getBoolean(KEY_VIDEO_SMOOTH, false)
         set(v) = sp(this).edit().putBoolean(KEY_VIDEO_SMOOTH, v).apply()
+
+    /** Smoothness tier for the split-video slideshow. Defaults to LOW (the cheapest). */
+    var Context.videoSmoothness: VideoSmoothness
+        get() = VideoSmoothness.valueOf(
+            sp(this).getString(KEY_VIDEO_SMOOTHNESS, VideoSmoothness.LOW.name)!!
+        )
+        set(v) = sp(this).edit().putString(KEY_VIDEO_SMOOTHNESS, v.name).apply()
 
     var Context.orientationVertical: Boolean
         get() = sp(this).getBoolean(KEY_ORIENTATION, true)

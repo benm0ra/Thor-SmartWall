@@ -1,33 +1,46 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@drawable/bg_gradient">
 
-    <!-- 3DS-style top status bar: app identity left, live clock right -->
+    <!-- Shared 3DS-style top status bar -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:background="@drawable/statusbar_bg"
-        android:paddingStart="18dp"
+        android:paddingStart="14dp"
         android:paddingEnd="18dp"
         android:paddingTop="12dp"
         android:paddingBottom="12dp"
         android:elevation="4dp">
 
+        <ImageButton
+            android:id="@+id/btnBack"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:src="@drawable/ic_back"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:scaleType="centerInside"
+            android:visibility="gone"
+            android:contentDescription="@string/back" />
+
         <ImageView
+            android:id="@+id/statusIcon"
             android:layout_width="26dp"
             android:layout_height="26dp"
             android:src="@drawable/ic_launcher_foreground"
-            android:background="@drawable/cat_chip"
+            android:background="@drawable/icon_chip_bg"
             android:backgroundTint="@color/accent_soft"
             android:contentDescription="@string/app_name" />
 
         <TextView
+            android:id="@+id/statusTitle"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
@@ -47,201 +60,248 @@
             tools:ignore="MissingConstraints" />
     </LinearLayout>
 
-    <ScrollView
+    <!-- Screen switcher: child 0 = home menu, 1 = source, 2 = fit, 3 = motion, 4 = power, 5 = advanced -->
+    <ViewFlipper
+        android:id="@+id/flipper"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:scrollbars="none"
-        android:clipToPadding="false"
-        android:paddingBottom="24dp">
+        android:layout_weight="1">
 
-        <LinearLayout
+        <!-- ============ CHILD 0: HOME MENU ============ -->
+        <ScrollView
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp">
+            android:layout_height="match_parent"
+            android:scrollbars="none"
+            android:clipToPadding="false"
+            android:paddingBottom="24dp">
 
-            <!-- Hero: the Thor shown like it's displaying its own home screen -->
-            <FrameLayout
-                android:layout_width="200dp"
-                android:layout_height="240dp"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginTop="18dp"
-                android:background="@drawable/thor_device_shell">
-
-                <ImageView
-                    android:id="@+id/previewTop"
-                    android:layout_width="184dp"
-                    android:layout_height="106dp"
-                    android:layout_marginStart="8dp"
-                    android:layout_marginTop="6dp"
-                    android:background="@drawable/rounded_screen_bg"
-                    android:clipToOutline="true"
-                    android:scaleType="centerCrop"
-                    android:contentDescription="@string/preview_top_desc" />
-
-                <ImageView
-                    android:id="@+id/previewBottom"
-                    android:layout_width="100dp"
-                    android:layout_height="87dp"
-                    android:layout_marginStart="50dp"
-                    android:layout_marginTop="142dp"
-                    android:background="@drawable/rounded_screen_bg"
-                    android:clipToOutline="true"
-                    android:scaleType="centerCrop"
-                    android:contentDescription="@string/preview_bottom_desc" />
-            </FrameLayout>
-
-            <TextView
-                android:id="@+id/previewEmptyHint"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginTop="8dp"
-                android:text="@string/preview_empty_hint"
-                android:textColor="@color/ink_soft"
-                android:textSize="12sp" />
-
-            <!-- Primary action lives up top, always reachable -->
-            <Button
-                android:id="@+id/btnApplyLive"
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="56dp"
-                android:layout_marginTop="16dp"
-                android:background="@drawable/accent_button_bg"
-                android:textColor="#FFFFFF"
-                android:textStyle="bold"
-                android:textSize="17sp"
-                android:textAllCaps="false"
-                android:stateListAnimator="@null"
-                android:text="@string/apply_live_wallpaper" />
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp">
 
-            <!-- Wallpaper Source -->
-            <LinearLayout style="@style/SectionRow">
-                <View android:layout_width="10dp" android:layout_height="10dp"
-                    android:background="@drawable/cat_chip" android:backgroundTint="@color/cat_source"
-                    android:layout_marginEnd="8dp" />
-                <TextView style="@style/SectionLabel" android:text="@string/section_source" />
-            </LinearLayout>
-            <LinearLayout style="@style/Tile">
-                <Button style="@style/TileButton" android:id="@+id/btnPickWallpaper" android:text="@string/pick_wallpaper_unified" />
-                <TextView style="@style/TileHint" android:layout_marginTop="6dp" android:text="@string/pick_wallpaper_hint" />
-                <Button style="@style/TileButton" android:id="@+id/btnSearchGifs" android:text="@string/search_gifs_online" />
-            </LinearLayout>
+                <!-- Thor device hero -->
+                <FrameLayout
+                    android:layout_width="200dp"
+                    android:layout_height="240dp"
+                    android:layout_gravity="center_horizontal"
+                    android:layout_marginTop="18dp"
+                    android:background="@drawable/thor_device_shell">
 
-            <!-- Screen Fit -->
-            <LinearLayout style="@style/SectionRow">
-                <View android:layout_width="10dp" android:layout_height="10dp"
-                    android:background="@drawable/cat_chip" android:backgroundTint="@color/cat_fit"
-                    android:layout_marginEnd="8dp" />
-                <TextView style="@style/SectionLabel" android:text="@string/section_fit" />
-            </LinearLayout>
-            <LinearLayout style="@style/Tile">
-                <com.google.android.material.switchmaterial.SwitchMaterial
-                    android:id="@+id/switchIndependent"
-                    style="@style/TileSwitch"
-                    android:text="@string/smart_fit_mode"
-                    android:checked="true" />
-                <TextView style="@style/TileHint" android:text="@string/smart_fit_hint" />
+                    <ImageView
+                        android:id="@+id/previewTop"
+                        android:layout_width="184dp"
+                        android:layout_height="106dp"
+                        android:layout_marginStart="8dp"
+                        android:layout_marginTop="6dp"
+                        android:background="@drawable/rounded_screen_bg"
+                        android:clipToOutline="true"
+                        android:scaleType="centerCrop"
+                        android:contentDescription="@string/preview_top_desc" />
 
-                <Button
-                    style="@style/TileButton"
-                    android:id="@+id/btnPickSecondary"
-                    android:layout_marginTop="10dp"
-                    android:text="@string/pick_bottom_image" />
-
-                <View style="@style/TileDivider" />
-
-                <com.google.android.material.switchmaterial.SwitchMaterial
-                    android:id="@+id/switchVertical"
-                    style="@style/TileSwitch"
-                    android:checked="true"
-                    android:text="@string/stacked_vertically" />
-
-                <com.google.android.material.switchmaterial.SwitchMaterial
-                    android:id="@+id/switchSwap"
-                    style="@style/TileSwitch"
-                    android:text="@string/swap_screen_order" />
+                    <ImageView
+                        android:id="@+id/previewBottom"
+                        android:layout_width="100dp"
+                        android:layout_height="87dp"
+                        android:layout_marginStart="50dp"
+                        android:layout_marginTop="142dp"
+                        android:background="@drawable/rounded_screen_bg"
+                        android:clipToOutline="true"
+                        android:scaleType="centerCrop"
+                        android:contentDescription="@string/preview_bottom_desc" />
+                </FrameLayout>
 
                 <TextView
-                    style="@style/TileLabel"
-                    android:id="@+id/labelHingeGap"
+                    android:id="@+id/previewEmptyHint"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_horizontal"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/preview_empty_hint"
+                    android:textColor="@color/ink_soft"
+                    android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/btnApplyLive"
+                    android:layout_width="match_parent"
+                    android:layout_height="56dp"
+                    android:layout_marginTop="16dp"
+                    android:background="@drawable/accent_button_bg"
+                    android:textColor="#FFFFFF"
+                    android:textStyle="bold"
+                    android:textSize="17sp"
+                    android:textAllCaps="false"
+                    android:stateListAnimator="@null"
+                    android:text="@string/apply_live_wallpaper" />
+
+                <!-- Home menu tile grid -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="18dp"
+                    android:weightSum="2">
+
+                    <LinearLayout android:id="@+id/tileSource" style="@style/HomeTile" android:layout_marginEnd="6dp">
+                        <ImageView style="@style/HomeTileIcon" android:backgroundTint="@color/cat_source" android:src="@drawable/ic_cat_source" android:scaleType="center" android:contentDescription="@null" />
+                        <TextView style="@style/HomeTileLabel" android:text="@string/section_source" />
+                        <TextView style="@style/HomeTileSub" android:text="@string/tile_sub_source" />
+                    </LinearLayout>
+
+                    <LinearLayout android:id="@+id/tileFit" style="@style/HomeTile" android:layout_marginStart="6dp">
+                        <ImageView style="@style/HomeTileIcon" android:backgroundTint="@color/cat_fit" android:src="@drawable/ic_cat_fit" android:scaleType="center" android:contentDescription="@null" />
+                        <TextView style="@style/HomeTileLabel" android:text="@string/section_fit" />
+                        <TextView style="@style/HomeTileSub" android:text="@string/tile_sub_fit" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
                     android:layout_marginTop="12dp"
-                    android:text="@string/hinge_gap" />
-                <SeekBar
-                    android:id="@+id/seekGap"
+                    android:weightSum="2">
+
+                    <LinearLayout android:id="@+id/tileMotion" style="@style/HomeTile" android:layout_marginEnd="6dp">
+                        <ImageView style="@style/HomeTileIcon" android:backgroundTint="@color/cat_motion" android:src="@drawable/ic_cat_motion" android:scaleType="center" android:contentDescription="@null" />
+                        <TextView style="@style/HomeTileLabel" android:text="@string/section_motion" />
+                        <TextView style="@style/HomeTileSub" android:text="@string/tile_sub_motion" />
+                    </LinearLayout>
+
+                    <LinearLayout android:id="@+id/tilePower" style="@style/HomeTile" android:layout_marginStart="6dp">
+                        <ImageView style="@style/HomeTileIcon" android:backgroundTint="@color/cat_power" android:src="@drawable/ic_cat_power" android:scaleType="center" android:contentDescription="@null" />
+                        <TextView style="@style/HomeTileLabel" android:text="@string/section_background" />
+                        <TextView style="@style/HomeTileSub" android:text="@string/tile_sub_power" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp" />
+                    android:orientation="horizontal"
+                    android:layout_marginTop="12dp"
+                    android:weightSum="2">
+
+                    <LinearLayout android:id="@+id/tileAdvanced" style="@style/HomeTile" android:layout_marginEnd="6dp">
+                        <ImageView style="@style/HomeTileIcon" android:backgroundTint="@color/cat_advanced" android:src="@drawable/ic_cat_advanced" android:scaleType="center" android:contentDescription="@null" />
+                        <TextView style="@style/HomeTileLabel" android:text="@string/section_advanced" />
+                        <TextView style="@style/HomeTileSub" android:text="@string/tile_sub_advanced" />
+                    </LinearLayout>
+
+                    <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" android:layout_marginStart="6dp" />
+                </LinearLayout>
+
             </LinearLayout>
+        </ScrollView>
 
-            <!-- Motion -->
-            <LinearLayout style="@style/SectionRow">
-                <View android:layout_width="10dp" android:layout_height="10dp"
-                    android:background="@drawable/cat_chip" android:backgroundTint="@color/cat_motion"
-                    android:layout_marginEnd="8dp" />
-                <TextView style="@style/SectionLabel" android:text="@string/section_motion" />
+        <!-- ============ CHILD 1: SOURCE ============ -->
+        <ScrollView android:layout_width="match_parent" android:layout_height="match_parent" android:scrollbars="none">
+            <LinearLayout style="@style/SubScreen">
+                <TextView style="@style/SubTitle" android:text="@string/section_source" />
+                <LinearLayout style="@style/Tile">
+                    <Button style="@style/TileButton" android:id="@+id/btnPickWallpaper" android:text="@string/pick_wallpaper_unified" />
+                    <TextView style="@style/TileHint" android:layout_marginTop="6dp" android:text="@string/pick_wallpaper_hint" />
+                    <Button style="@style/TileButton" android:id="@+id/btnSearchGifs" android:text="@string/search_gifs_online" />
+                </LinearLayout>
             </LinearLayout>
-            <LinearLayout style="@style/Tile">
-                <RadioGroup
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical">
-                    <RadioButton style="@style/TileRadio" android:id="@+id/radioKenBurns" android:checked="true" android:text="@string/mode_ken_burns" />
-                    <RadioButton style="@style/TileRadio" android:id="@+id/radioStatic" android:text="@string/mode_static" />
-                    <RadioButton style="@style/TileRadio" android:id="@+id/radioVideo" android:text="@string/mode_video" />
-                    <RadioButton style="@style/TileRadio" android:id="@+id/radioGif" android:text="@string/mode_gif" />
-                </RadioGroup>
+        </ScrollView>
 
-                <View style="@style/TileDivider" />
-
-                <com.google.android.material.switchmaterial.SwitchMaterial
-                    android:id="@+id/switchVideoSmooth"
-                    style="@style/TileSwitch"
-                    android:text="@string/video_smooth_toggle" />
-                <TextView style="@style/TileHint" android:text="@string/video_smooth_hint" />
+        <!-- ============ CHILD 2: SCREEN FIT ============ -->
+        <ScrollView android:layout_width="match_parent" android:layout_height="match_parent" android:scrollbars="none">
+            <LinearLayout style="@style/SubScreen">
+                <TextView style="@style/SubTitle" android:text="@string/section_fit" />
+                <LinearLayout style="@style/Tile">
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switchIndependent" style="@style/TileSwitch"
+                        android:text="@string/smart_fit_mode" android:checked="true" />
+                    <TextView style="@style/TileHint" android:text="@string/smart_fit_hint" />
+                    <Button style="@style/TileButton" android:id="@+id/btnPickSecondary"
+                        android:layout_marginTop="10dp" android:text="@string/pick_bottom_image" />
+                    <View style="@style/TileDivider" />
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switchVertical" style="@style/TileSwitch"
+                        android:checked="true" android:text="@string/stacked_vertically" />
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switchSwap" style="@style/TileSwitch"
+                        android:text="@string/swap_screen_order" />
+                    <TextView style="@style/TileLabel" android:id="@+id/labelHingeGap"
+                        android:layout_marginTop="12dp" android:text="@string/hinge_gap" />
+                    <SeekBar android:id="@+id/seekGap" android:layout_width="match_parent"
+                        android:layout_height="wrap_content" android:layout_marginTop="2dp" />
+                </LinearLayout>
             </LinearLayout>
+        </ScrollView>
 
-            <!-- Keep It Running -->
-            <LinearLayout style="@style/SectionRow">
-                <View android:layout_width="10dp" android:layout_height="10dp"
-                    android:background="@drawable/cat_chip" android:backgroundTint="@color/cat_power"
-                    android:layout_marginEnd="8dp" />
-                <TextView style="@style/SectionLabel" android:text="@string/section_background" />
+        <!-- ============ CHILD 3: MOTION ============ -->
+        <ScrollView android:layout_width="match_parent" android:layout_height="match_parent" android:scrollbars="none">
+            <LinearLayout style="@style/SubScreen">
+                <TextView style="@style/SubTitle" android:text="@string/section_motion" />
+                <LinearLayout style="@style/Tile">
+                    <RadioGroup android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+                        <RadioButton style="@style/TileRadio" android:id="@+id/radioKenBurns" android:checked="true" android:text="@string/mode_ken_burns" />
+                        <RadioButton style="@style/TileRadio" android:id="@+id/radioStatic" android:text="@string/mode_static" />
+                        <RadioButton style="@style/TileRadio" android:id="@+id/radioVideo" android:text="@string/mode_video" />
+                        <RadioButton style="@style/TileRadio" android:id="@+id/radioGif" android:text="@string/mode_gif" />
+                    </RadioGroup>
+                    <View style="@style/TileDivider" />
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switchVideoSmooth" style="@style/TileSwitch" android:text="@string/video_smooth_toggle" />
+                    <TextView style="@style/TileHint" android:text="@string/video_smooth_hint" />
+                    <LinearLayout android:id="@+id/smoothnessGroup" android:layout_width="match_parent"
+                        android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="12dp">
+                        <TextView style="@style/TileLabel" android:text="@string/smoothness_label" />
+                        <com.google.android.material.button.MaterialButtonToggleGroup
+                            android:id="@+id/toggleSmoothness" android:layout_width="match_parent"
+                            android:layout_height="wrap_content" android:layout_marginTop="8dp"
+                            app:singleSelection="true" app:selectionRequired="true">
+                            <Button android:id="@+id/smoothLow" style="?attr/materialButtonOutlinedStyle"
+                                android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+                                android:textAllCaps="false" android:text="@string/smoothness_low" />
+                            <Button android:id="@+id/smoothMedium" style="?attr/materialButtonOutlinedStyle"
+                                android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+                                android:textAllCaps="false" android:text="@string/smoothness_medium" />
+                            <Button android:id="@+id/smoothHigh" style="?attr/materialButtonOutlinedStyle"
+                                android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+                                android:textAllCaps="false" android:text="@string/smoothness_high" />
+                        </com.google.android.material.button.MaterialButtonToggleGroup>
+                        <TextView style="@style/TileHint" android:text="@string/smoothness_hint" />
+                    </LinearLayout>
+                </LinearLayout>
             </LinearLayout>
-            <LinearLayout style="@style/Tile">
-                <TextView style="@style/TileHint" android:text="@string/background_explainer" />
-                <Button
-                    style="@style/TileButton"
-                    android:id="@+id/btnBatteryOptimization"
-                    android:layout_marginTop="10dp"
-                    android:text="@string/keep_running_background" />
+        </ScrollView>
+
+        <!-- ============ CHILD 4: KEEP RUNNING ============ -->
+        <ScrollView android:layout_width="match_parent" android:layout_height="match_parent" android:scrollbars="none">
+            <LinearLayout style="@style/SubScreen">
+                <TextView style="@style/SubTitle" android:text="@string/section_background" />
+                <LinearLayout style="@style/Tile">
+                    <TextView style="@style/TileHint" android:text="@string/background_explainer" />
+                    <Button style="@style/TileButton" android:id="@+id/btnBatteryOptimization"
+                        android:layout_marginTop="10dp" android:text="@string/keep_running_background" />
+                </LinearLayout>
             </LinearLayout>
+        </ScrollView>
 
-            <!-- Advanced (collapsed feel: export, diagnostics, rotation) -->
-            <LinearLayout style="@style/SectionRow">
-                <View android:layout_width="10dp" android:layout_height="10dp"
-                    android:background="@drawable/cat_chip" android:backgroundTint="@color/cat_advanced"
-                    android:layout_marginEnd="8dp" />
-                <TextView style="@style/SectionLabel" android:text="@string/section_advanced" />
+        <!-- ============ CHILD 5: ADVANCED ============ -->
+        <ScrollView android:layout_width="match_parent" android:layout_height="match_parent" android:scrollbars="none">
+            <LinearLayout style="@style/SubScreen">
+                <TextView style="@style/SubTitle" android:text="@string/section_advanced" />
+                <LinearLayout style="@style/Tile">
+                    <Button style="@style/TileButton" android:id="@+id/btnExport" android:layout_marginTop="0dp" android:text="@string/export_split_images" />
+                    <Button style="@style/TileButton" android:id="@+id/btnDiagnostics" android:text="@string/show_screen_info" />
+                    <TextView style="@style/TileHint" android:layout_marginTop="8dp" android:text="@string/export_hint" />
+                    <View style="@style/TileDivider" />
+                    <Button style="@style/TileButton" android:id="@+id/btnDebugReport" android:layout_marginTop="0dp" android:text="@string/create_debug_report" />
+                    <TextView style="@style/TileHint" android:text="@string/debug_report_hint" />
+                    <View style="@style/TileDivider" />
+                    <TextView style="@style/TileHint" android:text="@string/rotation_fix_hint" />
+                    <TextView style="@style/TileLabel" android:id="@+id/labelRotationValue" android:layout_marginTop="6dp" android:textStyle="bold" />
+                    <Button style="@style/TileButton" android:id="@+id/btnRotationFix" android:text="@string/rotate_90_button" />
+                </LinearLayout>
             </LinearLayout>
-            <LinearLayout style="@style/Tile">
-                <Button style="@style/TileButton" android:id="@+id/btnExport" android:layout_marginTop="0dp" android:text="@string/export_split_images" />
-                <Button style="@style/TileButton" android:id="@+id/btnDiagnostics" android:text="@string/show_screen_info" />
-                <TextView style="@style/TileHint" android:layout_marginTop="8dp" android:text="@string/export_hint" />
+        </ScrollView>
 
-                <View style="@style/TileDivider" />
-
-                <TextView style="@style/TileHint" android:text="@string/rotation_fix_hint" />
-                <TextView
-                    style="@style/TileLabel"
-                    android:id="@+id/labelRotationValue"
-                    android:layout_marginTop="6dp"
-                    android:textStyle="bold" />
-                <Button style="@style/TileButton" android:id="@+id/btnRotationFix" android:text="@string/rotate_90_button" />
-            </LinearLayout>
-
-        </LinearLayout>
-    </ScrollView>
+    </ViewFlipper>
 </LinearLayout>

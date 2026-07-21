@@ -69,8 +69,8 @@ class SmartSplitWallpaperService : WallpaperService() {
         private val kenBurnsPeriodMs = 26_000L
         private val overscan = 0.16f
 
-        // Video sampling: see setupVideo() for why this exists instead of a live MediaPlayer.
-        private val videoFrameCount = 16
+        // Split-video: frames are sampled once up front then cycled, so the loop stays cheap at
+        // runtime regardless of how many frames the chosen smoothness tier decodes. See setupVideoSplit().
         private val videoLoopMs = 6_000L
 
         /** Which sampled video frame should be showing right now, phase-locked via the shared epoch. */
@@ -127,6 +127,7 @@ class SmartSplitWallpaperService : WallpaperService() {
 
         override fun onCreate(surfaceHolder: SurfaceHolder) {
             super.onCreate(surfaceHolder)
+            DebugLog.d("Engine.onCreate")
             val filter = android.content.IntentFilter(Intent.ACTION_SCREEN_OFF).apply {
                 addAction(Intent.ACTION_SCREEN_ON)
             }
@@ -136,6 +137,7 @@ class SmartSplitWallpaperService : WallpaperService() {
         override fun onSurfaceCreated(holder: SurfaceHolder) {
             super.onSurfaceCreated(holder)
             resolveScreenGeometry()
+            DebugLog.d("Engine.onSurfaceCreated: mode=${applicationContext.mode}, screen=${myLogicalScreen?.let { "${it.widthPx}x${it.heightPx} id=${it.displayId}" } ?: "null"}, totalScreens=${allScreensLogical.size}")
             prepareContentForCurrentMode(holder)
         }
 
@@ -148,6 +150,16 @@ class SmartSplitWallpaperService : WallpaperService() {
         override fun onVisibilityChanged(isVisible: Boolean) {
             visible = isVisible
             updatePlaybackState()
+            // Static and smooth-video modes have no repeating draw loop to fall back on, so if
+            // they became ready while the surface was hidden (a common race right after applying),
+            // nothing would ever paint them. Force one draw now that we're visible. Animated modes
+            // are already covered by their loop, but a redundant draw here is harmless.
+            if (isVisible) {
+                val ctx = applicationContext
+                if (ctx.mode != WallMode.VIDEO || !ctx.videoSmoothMode) {
+                    drawFrame()
+                }
+            }
         }
 
         override fun onSurfaceDestroyed(holder: SurfaceHolder) {
@@ -222,24 +234,40 @@ class SmartSplitWallpaperService : WallpaperService() {
             videoFrames = emptyList()
 
             val ctx = applicationContext
-            val screen = myLogicalScreen ?: return
+            val screen = myLogicalScreen
+            if (screen == null) {
+                DebugLog.w("setupImage: no screen resolved yet; drawing diagnostic")
+                drawFrame()
+                return
+            }
             val overscanAmount = if (ctx.mode == WallMode.KEN_BURNS) overscan else 0f
 
             readyBitmap = try {
                 if (ctx.independentMode) {
-                    val primary = loadBitmap(ctx.imageUri) ?: return
-                    val secondary = loadBitmap(ctx.imageUriSecondary) ?: primary
-                    val sources = mapOf(
-                        (allScreensLogical.getOrNull(0)?.displayId ?: 0) to primary,
-                        (allScreensLogical.getOrNull(1)?.displayId ?: 1) to secondary
-                    )
-                    SplitEngine.computeIndependentCrops(sources, allScreensLogical, overscanAmount)[screen.displayId]
+                    val primary = loadBitmap(ctx.imageUri)
+                    if (primary == null) {
+                        DebugLog.w("setupImage: primary image failed to load (uri=${ctx.imageUri})")
+                        null
+                    } else {
+                        val secondary = loadBitmap(ctx.imageUriSecondary) ?: primary
+                        val sources = mapOf(
+                            (allScreensLogical.getOrNull(0)?.displayId ?: 0) to primary,
+                            (allScreensLogical.getOrNull(1)?.displayId ?: 1) to secondary
+                        )
+                        SplitEngine.computeIndependentCrops(sources, allScreensLogical, overscanAmount)[screen.displayId]
+                    }
                 } else {
-                    val source = loadBitmap(ctx.imageUri) ?: return
-                    val orientation = if (ctx.orientationVertical) StackOrientation.VERTICAL else StackOrientation.HORIZONTAL
-                    SplitEngine.computeCrops(source, allScreensLogical, orientation, ctx.gapFraction, overscanAmount)[screen.displayId]
+                    val source = loadBitmap(ctx.imageUri)
+                    if (source == null) {
+                        DebugLog.w("setupImage: image failed to load (uri=${ctx.imageUri})")
+                        null
+                    } else {
+                        val orientation = if (ctx.orientationVertical) StackOrientation.VERTICAL else StackOrientation.HORIZONTAL
+                        SplitEngine.computeCrops(source, allScreensLogical, orientation, ctx.gapFraction, overscanAmount)[screen.displayId]
+                    }
                 }
             } catch (t: Throwable) {
+                DebugLog.e("setupImage: crop failed", t)
                 null
             }
             drawFrame()
@@ -317,6 +345,7 @@ class SmartSplitWallpaperService : WallpaperService() {
             val screensSnapshot = allScreensLogical
             val orientation = if (ctx.orientationVertical) StackOrientation.VERTICAL else StackOrientation.HORIZONTAL
             val gap = ctx.gapFraction
+            val smoothness = ctx.videoSmoothness
 
             Thread {
                 val sampled = try {
@@ -324,12 +353,14 @@ class SmartSplitWallpaperService : WallpaperService() {
                     retriever.setDataSource(ctx, uriStr.toUri())
                     val durationMs = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
                         ?.toLongOrNull()?.coerceAtLeast(1L) ?: 1000L
+                    val frameCount = smoothness.frameCount
                     val frames = mutableListOf<Bitmap>()
-                    for (i in 0 until videoFrameCount) {
-                        val timeUs = durationMs * 1000L * i / videoFrameCount
+                    for (i in 0 until frameCount) {
+                        val timeUs = durationMs * 1000L * i / frameCount
                         val raw = try {
                             retriever.getScaledFrameAtTime(
-                                timeUs, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 960, 540
+                                timeUs, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                                smoothness.sampleWidth, smoothness.sampleHeight
                             )
                         } catch (_: Throwable) {
                             null

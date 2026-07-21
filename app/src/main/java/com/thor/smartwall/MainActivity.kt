@@ -22,6 +22,7 @@ import com.thor.smartwall.Prefs.orientationVertical
 import com.thor.smartwall.Prefs.rotationOverrideDegrees
 import com.thor.smartwall.Prefs.swapOrder
 import com.thor.smartwall.Prefs.videoSmoothMode
+import com.thor.smartwall.Prefs.videoSmoothness
 import com.thor.smartwall.Prefs.videoUri
 import com.thor.smartwall.databinding.ActivityMainBinding
 import java.io.File
@@ -49,6 +50,33 @@ class MainActivity : AppCompatActivity() {
         override fun run() {
             binding.statusClock.text = clockFormat.format(java.util.Date())
             clockHandler.postDelayed(this, 15_000L)
+        }
+    }
+
+    // ViewFlipper child indices, in layout order.
+    private val homeIndex = 0
+    private val subTitles by lazy {
+        mapOf(
+            1 to getString(R.string.section_source),
+            2 to getString(R.string.section_fit),
+            3 to getString(R.string.section_motion),
+            4 to getString(R.string.section_background),
+            5 to getString(R.string.section_advanced)
+        )
+    }
+
+    /** Flip to a sub-screen (or home) and update the status bar's title + back button. */
+    private fun showScreen(index: Int) {
+        binding.flipper.displayedChild = index
+        if (index == homeIndex) {
+            binding.statusTitle.text = getString(R.string.app_name)
+            binding.btnBack.visibility = android.view.View.GONE
+            binding.statusIcon.visibility = android.view.View.VISIBLE
+            renderPreview()
+        } else {
+            binding.statusTitle.text = subTitles[index] ?: getString(R.string.app_name)
+            binding.btnBack.visibility = android.view.View.VISIBLE
+            binding.statusIcon.visibility = android.view.View.GONE
         }
     }
 
@@ -109,6 +137,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        DebugLog.init(this)
+        DebugLog.d("MainActivity.onCreate")
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -152,7 +182,16 @@ class MainActivity : AppCompatActivity() {
         binding.radioGif.setOnClickListener { mode = WallMode.GIF; renderPreview() }
         binding.switchVideoSmooth.setOnCheckedChangeListener { _, checked ->
             videoSmoothMode = checked
+            updateSmoothnessVisibility()
             renderPreview()
+        }
+        binding.toggleSmoothness.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (!isChecked) return@addOnButtonCheckedListener
+            videoSmoothness = when (checkedId) {
+                R.id.smoothMedium -> VideoSmoothness.MEDIUM
+                R.id.smoothHigh -> VideoSmoothness.HIGH
+                else -> VideoSmoothness.LOW
+            }
         }
 
         binding.btnApplyLive.setOnClickListener { applyAsLiveWallpaper() }
@@ -163,7 +202,29 @@ class MainActivity : AppCompatActivity() {
             rotationOverrideDegrees = (rotationOverrideDegrees + 90) % 360
             updateRotationLabel()
         }
+        binding.btnDebugReport.setOnClickListener { createDebugReport() }
 
+        // Home-menu tile navigation
+        binding.tileSource.setOnClickListener { showScreen(1) }
+        binding.tileFit.setOnClickListener { showScreen(2) }
+        binding.tileMotion.setOnClickListener { showScreen(3) }
+        binding.tilePower.setOnClickListener { showScreen(4) }
+        binding.tileAdvanced.setOnClickListener { showScreen(5) }
+        binding.btnBack.setOnClickListener { showScreen(homeIndex) }
+
+        // System back returns to the home menu before exiting the app
+        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (binding.flipper.displayedChild != homeIndex) {
+                    showScreen(homeIndex)
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                }
+            }
+        })
+
+        showScreen(homeIndex)
         renderPreview()
     }
 
@@ -179,6 +240,25 @@ class MainActivity : AppCompatActivity() {
         clockHandler.removeCallbacks(clockRunnable)
     }
 
+    /** The smoothness tiers only affect split video; hide them when Smooth (duplicated) is on. */
+    private fun createDebugReport() {
+        val result = DebugReport.saveToDownloads(this)
+        if (result.success) {
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle(R.string.create_debug_report)
+                .setMessage(getString(R.string.debug_report_saved, result.location))
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+        } else {
+            Toast.makeText(this, getString(R.string.debug_report_failed, result.location), Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun updateSmoothnessVisibility() {
+        binding.smoothnessGroup.visibility =
+            if (videoSmoothMode) android.view.View.GONE else android.view.View.VISIBLE
+    }
+
     private fun updateRotationLabel() {
         binding.labelRotationValue.text = getString(R.string.rotation_current_value, rotationOverrideDegrees)
     }
@@ -192,6 +272,12 @@ class MainActivity : AppCompatActivity() {
         binding.seekGap.isEnabled = !independentMode
         binding.labelHingeGap.alpha = if (independentMode) 0.4f else 1f
         binding.switchVideoSmooth.isChecked = videoSmoothMode
+        when (videoSmoothness) {
+            VideoSmoothness.LOW -> binding.toggleSmoothness.check(R.id.smoothLow)
+            VideoSmoothness.MEDIUM -> binding.toggleSmoothness.check(R.id.smoothMedium)
+            VideoSmoothness.HIGH -> binding.toggleSmoothness.check(R.id.smoothHigh)
+        }
+        updateSmoothnessVisibility()
         when (mode) {
             WallMode.STATIC -> binding.radioStatic.isChecked = true
             WallMode.KEN_BURNS -> binding.radioKenBurns.isChecked = true
@@ -360,6 +446,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun applyAsLiveWallpaper() {
+        DebugLog.d("Apply tapped: mode=${mode}, smart=${independentMode}, vertical=${orientationVertical}, swap=${swapOrder}, smooth=${videoSmoothMode}")
         Prefs.resetEpoch(this)
         val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER)
         intent.putExtra(
@@ -368,7 +455,8 @@ class MainActivity : AppCompatActivity() {
         )
         try {
             startActivity(intent)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            DebugLog.e("Failed to open live wallpaper picker", e)
             Toast.makeText(this, R.string.open_wallpaper_picker_manually, Toast.LENGTH_LONG).show()
         }
     }
