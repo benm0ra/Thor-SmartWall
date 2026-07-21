@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Stylized illustration of the Thor's open clamshell body, proportioned from its real specs
-  (top: 1080x1920 @ 6" => ~2.94"x5.23"; bottom: 1080x1240 @ 3.92" => ~2.57"x2.96" - note the
-  bottom panel is physically NARROWER than the top despite sharing pixel width, since it's a
-  smaller/denser panel centered in the body with room left over for the joysticks/D-pad/buttons).
-  This is an illustration, not a photographic likeness - the actual live-preview ImageViews sit
-  on top of the transparent-looking screen cutouts at these exact same coordinates (see
-  activity_main.xml, where previewTop/previewBottom use matching margins and sizes).
+  Stylized illustration of the Thor used the way it's actually held: LANDSCAPE, Switch-style -
+  top screen wide (1920x1080, ~16:9), hinge below it, then a wider-but-shorter bottom screen
+  (1240x1080) flanked by the left stick+D-pad and the right stick+Y-X-A-B diamond. Confirmed
+  against a reference photo of the running device, not just the spec sheet (an earlier revision
+  of this file wrongly assumed a portrait book-style layout - see project README/history). The
+  live-preview ImageViews sit on top of the transparent screen cutouts at these exact
+  coordinates - see activity_main.xml.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="170dp"
-    android:height="409dp"
-    android:viewportWidth="170"
-    android:viewportHeight="409">
+    android:width="200dp"
+    android:height="240dp"
+    android:viewportWidth="200"
+    android:viewportHeight="240">
 
     <!-- Outer body -->
     <path
@@ -20,64 +20,64 @@
         android:strokeColor="#33FFFFFF"
         android:strokeWidth="1"
         android:pathData="
-            M26,0 L144,0
-            A26,26 0 0 1 170,26
-            L170,383
-            A26,26 0 0 1 144,409
-            L26,409
-            A26,26 0 0 1 0,383
-            L0,26
-            A26,26 0 0 1 26,0
+            M18,0 L182,0
+            A18,18 0 0 1 200,18
+            L200,222
+            A18,18 0 0 1 182,240
+            L18,240
+            A18,18 0 0 1 0,222
+            L0,18
+            A18,18 0 0 1 18,0
             Z" />
 
-    <!-- Top screen cutout (dark placeholder; the live preview ImageView is layered exactly here) -->
+    <!-- Top screen cutout (wide, ~16:9) -->
     <path
         android:fillColor="#000000"
         android:pathData="
-            M33,14 L138,14
-            A10,10 0 0 1 148,24
-            L148,226
-            A10,10 0 0 1 138,236
-            L33,236
-            A10,10 0 0 1 23,226
-            L23,24
-            A10,10 0 0 1 33,14
+            M14,6 L186,6
+            A6,6 0 0 1 192,12
+            L192,112
+            A6,6 0 0 1 186,118
+            L14,118
+            A6,6 0 0 1 8,112
+            L8,12
+            A6,6 0 0 1 14,6
             Z" />
 
     <!-- Hinge bar -->
-    <path android:fillColor="#12141A" android:pathData="M40,247 L130,247 L130,258 L40,258 Z" />
-    <path android:fillColor="#0D0F13" android:pathData="M52,252.5 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0 Z" />
-    <path android:fillColor="#0D0F13" android:pathData="M112,252.5 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0 Z" />
+    <path android:fillColor="#12141A" android:pathData="M40,120 L160,120 L160,128 L40,128 Z" />
+    <path android:fillColor="#0D0F13" android:pathData="M55,121.5 a2.5,2.5 0 1,0 5,0 a2.5,2.5 0 1,0 -5,0 Z" />
+    <path android:fillColor="#0D0F13" android:pathData="M140,121.5 a2.5,2.5 0 1,0 5,0 a2.5,2.5 0 1,0 -5,0 Z" />
 
-    <!-- Bottom screen cutout -->
+    <!-- Bottom screen cutout (chunkier aspect, ~1.15:1) -->
     <path
         android:fillColor="#000000"
         android:pathData="
-            M38,269 L131,269
-            A8,8 0 0 1 139,277
-            L139,387
-            A8,8 0 0 1 131,395
-            L38,395
-            A8,8 0 0 1 30,387
-            L30,277
-            A8,8 0 0 1 38,269
+            M55,142 L145,142
+            A5,5 0 0 1 150,147
+            L150,224
+            A5,5 0 0 1 145,229
+            L55,229
+            A5,5 0 0 1 50,224
+            L50,147
+            A5,5 0 0 1 55,142
             Z" />
 
-    <!-- Left joystick -->
-    <path android:fillColor="#2A2E37" android:pathData="M6,309 a9,9 0 1,0 18,0 a9,9 0 1,0 -18,0 Z" />
-    <path android:fillColor="#3D4350" android:pathData="M10.5,309 a4.5,4.5 0 1,0 9,0 a4.5,4.5 0 1,0 -9,0 Z" />
+    <!-- Left analog stick (upper-left of bottom section) -->
+    <path android:fillColor="#2A2E37" android:pathData="M15,152 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0 Z" />
+    <path android:fillColor="#3D4350" android:pathData="M20,152 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0 Z" />
 
-    <!-- Right joystick -->
-    <path android:fillColor="#2A2E37" android:pathData="M146,309 a9,9 0 1,0 18,0 a9,9 0 1,0 -18,0 Z" />
-    <path android:fillColor="#3D4350" android:pathData="M150.5,309 a4.5,4.5 0 1,0 9,0 a4.5,4.5 0 1,0 -9,0 Z" />
+    <!-- D-pad (lower-left) -->
+    <path android:fillColor="#2A2E37" android:pathData="M15,201 L31,201 L31,209 L15,209 Z" />
+    <path android:fillColor="#2A2E37" android:pathData="M19,197 L27,197 L27,213 L19,213 Z" />
 
-    <!-- D-pad, left -->
-    <path android:fillColor="#2A2E37" android:pathData="M9,357 L21,357 L21,363 L9,363 Z" />
-    <path android:fillColor="#2A2E37" android:pathData="M12,354 L18,354 L18,366 L12,366 Z" />
+    <!-- Y-X-A-B diamond (upper-right) -->
+    <path android:fillColor="#2A2E37" android:pathData="M181,147 a4.5,4.5 0 1,0 9,0 a4.5,4.5 0 1,0 -9,0 Z" />
+    <path android:fillColor="#2A2E37" android:pathData="M181,165 a4.5,4.5 0 1,0 9,0 a4.5,4.5 0 1,0 -9,0 Z" />
+    <path android:fillColor="#2A2E37" android:pathData="M172,156 a4.5,4.5 0 1,0 9,0 a4.5,4.5 0 1,0 -9,0 Z" />
+    <path android:fillColor="#2A2E37" android:pathData="M190,156 a4.5,4.5 0 1,0 9,0 a4.5,4.5 0 1,0 -9,0 Z" />
 
-    <!-- Face buttons, right -->
-    <path android:fillColor="#2A2E37" android:pathData="M152.4,354 a2.6,2.6 0 1,0 5.2,0 a2.6,2.6 0 1,0 -5.2,0 Z" />
-    <path android:fillColor="#2A2E37" android:pathData="M152.4,366 a2.6,2.6 0 1,0 5.2,0 a2.6,2.6 0 1,0 -5.2,0 Z" />
-    <path android:fillColor="#2A2E37" android:pathData="M146.4,360 a2.6,2.6 0 1,0 5.2,0 a2.6,2.6 0 1,0 -5.2,0 Z" />
-    <path android:fillColor="#2A2E37" android:pathData="M158.4,360 a2.6,2.6 0 1,0 5.2,0 a2.6,2.6 0 1,0 -5.2,0 Z" />
+    <!-- Right analog stick (lower-right) -->
+    <path android:fillColor="#2A2E37" android:pathData="M165,199 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0 Z" />
+    <path android:fillColor="#3D4350" android:pathData="M170,199 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0 Z" />
 </vector>

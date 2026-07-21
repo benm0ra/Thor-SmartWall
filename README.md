@@ -1,8 +1,9 @@
 # ThorPaper — a Wallpaper-Engine-style live wallpaper for the AYN Thor
 
 A live wallpaper app that takes one image (or video) and splits it correctly
-across the AYN Thor's two OLED panels (1080×1920 top / 1080×1240 bottom),
-instead of the usual "same picture stretched twice, doesn't line up" result.
+across the AYN Thor's two OLED panels, used landscape Switch-style (1920×1080
+top / 1240×1080 bottom), instead of the usual "same picture stretched twice,
+doesn't line up" result.
 
 ## Why you have to build this yourself
 
@@ -29,17 +30,17 @@ build `app-debug.apk` for you automatically and let you download it.
 Tap **Show Screen Info (diagnostics)** in the app with the Thor open. It
 lists exactly what Android's `DisplayManager` sees system-wide right now.
 
-On real Thor hardware this turned up something concrete: DisplayManager
-reports both panels **landscape-shaped** (e.g. `1920x1080` and `1240x1080` -
-width bigger than height) even though they're physically used stacked
-top-over-bottom in portrait. The app now detects that mismatch against the
-"stacked vertically" setting and rotates its drawing to compensate
-automatically. I can't test the actual rotation *direction* on real
-hardware, though, so there's a **Rotate Compensation 90°** button under
-"Orientation Fix" as a one-tap manual override if art still looks sideways
-or upside-down once applied - cycle it and re-apply until it looks right.
-This fix currently covers Static/Ken Burns/GIF; Video mode draws directly to
-the surface via MediaPlayer and isn't covered by it yet.
+Earlier revisions of this project assumed the Thor was a portrait book-style
+device (like a closed-book DS) based on its spec sheet, and built a rotation
+"fix" around that assumption when the diagnostic numbers came back landscape
+(1920×1080 / 1240×1080). A reference photo of the actual running device
+settled it: the Thor is used **landscape, Switch-style** - top screen above,
+wider-than-tall bottom screen below flanked by the sticks/D-pad/buttons -
+and those landscape numbers were correct all along. The rotation logic has
+been corrected accordingly; the **Rotate Compensation 90°** control under
+"Orientation Fix" is kept only as a manual escape hatch (defaults to 0°, no
+effect) in case a future firmware update or different Thor variant ever
+needs it.
 
 If **Show Screen Info** ever reports only one display instead of two, that's
 a different, unfixable-in-software situation: the per-screen split has to
@@ -112,7 +113,7 @@ will always work, live-wallpaper-engine support or not.
 - **Video mode**: loops an MP4 per screen with playback position aligned to
   that same shared clock. Note: video is filled/stretched to each screen
   independently (no seamless cross-hinge crop for video — that would need a
-  full GPU transcode pipeline) — pick a source near 1080×1920 or 1080×1240
+  full GPU transcode pipeline) — pick a source near 1920×1080 or 1240×1080
   for the least distortion, the same tradeoff real Wallpaper Engine makes for
   multi-monitor video wallpapers.
 - **Animated GIF mode**: decodes with Android's built-in `ImageDecoder` (API

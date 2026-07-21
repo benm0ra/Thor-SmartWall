@@ -21,8 +21,13 @@
             android:layout_marginBottom="18dp">
             <View
                 android:layout_width="6dp"
-                android:layout_height="26dp"
+                android:layout_height="18dp"
                 android:background="#7C4DFF" />
+            <View
+                android:layout_width="6dp"
+                android:layout_height="18dp"
+                android:layout_marginStart="2dp"
+                android:background="#FFCC33" />
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -33,19 +38,19 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- Hero: the Thor silhouette with the live split preview inside it -->
+        <!-- Hero: the Thor silhouette (landscape, Switch-style) with the live split preview inside it -->
         <FrameLayout
-            android:layout_width="170dp"
-            android:layout_height="409dp"
+            android:layout_width="200dp"
+            android:layout_height="240dp"
             android:layout_gravity="center_horizontal"
             android:background="@drawable/thor_device_shell">
 
             <ImageView
                 android:id="@+id/previewTop"
-                android:layout_width="125dp"
-                android:layout_height="222dp"
-                android:layout_marginStart="23dp"
-                android:layout_marginTop="14dp"
+                android:layout_width="184dp"
+                android:layout_height="106dp"
+                android:layout_marginStart="8dp"
+                android:layout_marginTop="6dp"
                 android:background="@drawable/rounded_screen_bg"
                 android:clipToOutline="true"
                 android:scaleType="centerCrop"
@@ -53,10 +58,10 @@
 
             <ImageView
                 android:id="@+id/previewBottom"
-                android:layout_width="109dp"
-                android:layout_height="126dp"
-                android:layout_marginStart="30dp"
-                android:layout_marginTop="269dp"
+                android:layout_width="100dp"
+                android:layout_height="87dp"
+                android:layout_marginStart="50dp"
+                android:layout_marginTop="142dp"
                 android:background="@drawable/rounded_screen_bg"
                 android:clipToOutline="true"
                 android:scaleType="centerCrop"
@@ -74,7 +79,10 @@
             android:textSize="11sp" />
 
         <!-- Card: Wallpaper Source -->
-        <TextView style="@style/SectionLabel" android:text="@string/section_source" />
+        <LinearLayout style="@style/SectionRow">
+            <View style="@style/SectionDot" android:backgroundTint="#7C4DFF" />
+            <TextView style="@style/SectionLabel" android:text="@string/section_source" />
+        </LinearLayout>
         <LinearLayout style="@style/Card">
             <Button style="@style/CardButton" android:id="@+id/btnPickImage" android:text="@string/pick_image" />
             <Button style="@style/CardButton" android:id="@+id/btnPickVideo" android:text="@string/pick_video" />
@@ -83,7 +91,10 @@
         </LinearLayout>
 
         <!-- Card: Screen Fit -->
-        <TextView style="@style/SectionLabel" android:text="@string/section_fit" />
+        <LinearLayout style="@style/SectionRow">
+            <View style="@style/SectionDot" android:backgroundTint="#4DD0E1" />
+            <TextView style="@style/SectionLabel" android:text="@string/section_fit" />
+        </LinearLayout>
         <LinearLayout style="@style/Card">
             <com.google.android.material.switchmaterial.SwitchMaterial
                 android:id="@+id/switchIndependent"
@@ -124,7 +135,10 @@
         </LinearLayout>
 
         <!-- Card: Motion -->
-        <TextView style="@style/SectionLabel" android:text="@string/section_motion" />
+        <LinearLayout style="@style/SectionRow">
+            <View style="@style/SectionDot" android:backgroundTint="#FFCC33" />
+            <TextView style="@style/SectionLabel" android:text="@string/section_motion" />
+        </LinearLayout>
         <LinearLayout style="@style/Card">
             <RadioGroup
                 android:layout_width="match_parent"
@@ -139,7 +153,10 @@
         </LinearLayout>
 
         <!-- Card: Orientation Fix -->
-        <TextView style="@style/SectionLabel" android:text="@string/section_orientation_fix" />
+        <LinearLayout style="@style/SectionRow">
+            <View style="@style/SectionDot" android:backgroundTint="#FF6EC7" />
+            <TextView style="@style/SectionLabel" android:text="@string/section_orientation_fix" />
+        </LinearLayout>
         <LinearLayout style="@style/Card">
             <TextView style="@style/CardHint" android:text="@string/rotation_fix_hint" />
             <TextView
@@ -154,7 +171,10 @@
         </LinearLayout>
 
         <!-- Card: Background & Power -->
-        <TextView style="@style/SectionLabel" android:text="@string/section_background" />
+        <LinearLayout style="@style/SectionRow">
+            <View style="@style/SectionDot" android:backgroundTint="#66D19E" />
+            <TextView style="@style/SectionLabel" android:text="@string/section_background" />
+        </LinearLayout>
         <LinearLayout style="@style/Card">
             <TextView style="@style/CardHint" android:text="@string/background_explainer" />
             <Button
@@ -165,7 +185,10 @@
         </LinearLayout>
 
         <!-- Card: Apply -->
-        <TextView style="@style/SectionLabel" android:text="@string/section_apply" />
+        <LinearLayout style="@style/SectionRow">
+            <View style="@style/SectionDot" android:backgroundTint="#FF6E6E" />
+            <TextView style="@style/SectionLabel" android:text="@string/section_apply" />
+        </LinearLayout>
         <LinearLayout style="@style/Card">
             <Button
                 android:id="@+id/btnApplyLive"

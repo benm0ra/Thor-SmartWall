@@ -159,42 +159,32 @@ class SmartSplitWallpaperService : WallpaperService() {
          * per-display Context that getDisplayContext() gives us - the crux of splitting across
          * two screens at all.
          *
-         * On the Thor specifically, DisplayManager reports both panels landscape-shaped (e.g.
-         * 1920x1080 and 1240x1080 - width bigger than height) even when they're physically used
-         * stacked top-over-bottom in portrait, per the "Show Screen Info" diagnostic. So on top of
-         * matching displays, this also detects that mismatch against the orientation you've told
-         * the app about (stacked vertically = expect each screen taller than wide) and works out
-         * the canvas rotation needed to compensate, so what we draw ends up upright instead of
-         * sideways. [rotationOverrideDegrees] is a manual nudge on top of that auto-detection, in
-         * case the actual rotation direction on real hardware turns out to be the mirror of what
-         * was guessed - flip it once from the app if art looks sideways/upside-down.
+         * A previous revision of this method tried to auto-detect and compensate for a supposed
+         * rotation mismatch, on the theory that the Thor's panels are "really" portrait and
+         * DisplayManager was reporting them landscape-rotated. A reference photo of the device
+         * running proved that theory wrong: the Thor is used landscape, Switch-style, top screen
+         * above bottom screen, both wider than tall - exactly what DisplayManager reports (e.g.
+         * 1920x1080 and 1240x1080). So the raw numbers are simply correct and no swap is needed.
+         * [rotationOverrideDegrees] is kept as a pure manual escape hatch in case some other Thor
+         * variant or a future firmware update ever does need it - it defaults to 0 (no rotation)
+         * and only applies if you deliberately dial it in from the Orientation Fix section.
          */
         private fun resolveScreenGeometry() {
             val displayContext = getDisplayContext() ?: applicationContext
             val display: Display? = displayContext.display
             val ctx = applicationContext
             val swap = ctx.swapOrder
-            val vertical = ctx.orientationVertical
             val raw = DisplayDetector.findScreens(ctx, swap)
 
-            allScreensLogical = raw.map { toLogicalScreen(it, vertical) }
+            allScreensLogical = raw
 
             val myId = display?.displayId ?: Display.DEFAULT_DISPLAY
             val rawMine = raw.firstOrNull { it.displayId == myId } ?: raw.firstOrNull()
             myScreen = rawMine
-            myLogicalScreen = rawMine?.let { toLogicalScreen(it, vertical) }
+            myLogicalScreen = rawMine
 
-            val autoDegrees = if (rawMine != null && needsRotationSwap(rawMine, vertical)) 90 else 0
-            myRotationDegrees = (autoDegrees + ctx.rotationOverrideDegrees).mod(360)
+            myRotationDegrees = ctx.rotationOverrideDegrees.mod(360)
         }
-
-        /** True if this screen's raw reported shape doesn't match what the chosen stacking orientation expects. */
-        private fun needsRotationSwap(s: ScreenSpec, verticalStack: Boolean): Boolean =
-            if (verticalStack) s.widthPx > s.heightPx else s.heightPx > s.widthPx
-
-        /** The screen's dimensions in the orientation we actually want to crop/draw for, swapped if needed. */
-        private fun toLogicalScreen(s: ScreenSpec, verticalStack: Boolean): ScreenSpec =
-            if (needsRotationSwap(s, verticalStack)) s.copy(widthPx = s.heightPx, heightPx = s.widthPx) else s
 
         private fun prepareContentForCurrentMode(holder: SurfaceHolder) {
             val ctx = applicationContext

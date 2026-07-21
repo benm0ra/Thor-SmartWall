@@ -32,7 +32,7 @@
     <string name="section_background">Background &amp; Power</string>
     <string name="section_apply">Apply</string>
     <string name="section_orientation_fix">Orientation Fix</string>
-    <string name="rotation_fix_hint">On some Thor units, Android reports both screens rotated 90° from how they\'re actually used, which can make the split look wrong once applied. If the wallpaper looks sideways or upside-down on the real device, tap this to rotate the compensation, then hit \"Set as Live Wallpaper\" again to see the change.</string>
+    <string name="rotation_fix_hint">The Thor\'s screens are used landscape and the app already accounts for that correctly - this should stay at 0° for normal use. It\'s here as a manual escape hatch only: if a firmware update or a different Thor variant ever needs a rotation nudge, cycle this and re-apply until it looks right.</string>
     <string name="rotate_90_button">Rotate Compensation 90°</string>
     <string name="rotation_current_value">Current compensation: %1$d°</string>
     <string name="background_explainer">Once applied, the wallpaper runs as its own Android system service and keeps going even after you close this app - that part is automatic. Some phone makers\' battery managers are aggressive about killing background apps though, which can affect this too. Exempting ThorPaper from battery optimization helps prevent that.</string>
@@ -53,7 +53,7 @@
     <string name="export_hint">If the Thor\'s launcher doesn\'t offer the second screen a live wallpaper of its own, use Export, then assign each PNG manually through the system wallpaper picker for that screen.</string>
     <string name="preview_top_desc">Top screen preview</string>
     <string name="preview_bottom_desc">Bottom screen preview</string>
-    <string name="preview_scale_note">Shown at the Thor\'s real 1080×1920 / 1080×1240 screen proportions</string>
+    <string name="preview_scale_note">Shown at the Thor\'s real 1920×1080 / 1240×1080 landscape screen proportions</string>
     <string name="could_not_load_image">Could not load that image</string>
     <string name="pick_image_first">Pick an image first</string>
     <string name="export_failed">Export failed</string>

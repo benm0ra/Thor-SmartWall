@@ -65,15 +65,17 @@ object DisplayDetector {
     }
 
     /**
-     * Known panel sizes for the Thor family (1080x1920 top / 1080x1240 bottom),
-     * used only for the in-app preview when the app is running as a normal
-     * single-screen activity and can't see the second panel itself. The live
-     * wallpaper engine never uses this — it always asks DisplayManager for the
-     * real thing at draw time, so it keeps working correctly even on Thor
-     * variants with slightly different panels.
+     * The Thor's panels used *as actually displayed* - landscape, confirmed both by the
+     * in-app "Show Screen Info" diagnostic (which reported 1920x1080 and 1240x1080) and by a
+     * reference photo of the running device: it's held/used landscape like a Switch, not
+     * portrait like a book-style DS. Used only for the in-app preview when the app is running
+     * as a normal single-screen activity and can't see the second panel itself. The live
+     * wallpaper engine never uses this — it always asks DisplayManager for the real thing at
+     * draw time, so it keeps working correctly even on Thor variants with slightly different
+     * panels.
      */
     val PREVIEW_FALLBACK = listOf(
-        ScreenSpec(displayId = -1, order = 0, widthPx = 1080, heightPx = 1920),
-        ScreenSpec(displayId = -2, order = 1, widthPx = 1080, heightPx = 1240)
+        ScreenSpec(displayId = -1, order = 0, widthPx = 1920, heightPx = 1080),
+        ScreenSpec(displayId = -2, order = 1, widthPx = 1240, heightPx = 1080)
     )
 }
