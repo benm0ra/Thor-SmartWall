@@ -131,8 +131,14 @@ class VideoFrameDecoder(
                 outIndex >= 0 -> {
                     if (bufferInfo.size > 0) {
                         try {
-                            val outFormat = dec.getOutputFormat(outIndex)
-                            val bmp = outputBufferToBitmap(dec, outIndex, outFormat, width, height)
+                            // getOutputImage() returns an Image with correct per-plane strides and
+                            // offsets regardless of the codec's underlying color format. Using it
+                            // (instead of hand-parsing the raw ByteBuffer against a guessed format)
+                            // is what removes the color-channel guesswork - the planes tell us
+                            // exactly where U and V live.
+                            val image = dec.getOutputImage(outIndex)
+                            val bmp = if (image != null) imageToBitmap(image, width, height) else null
+                            image?.close()
                             if (bmp != null && running) {
                                 framesEmitted++
                                 if (framesEmitted == 1) DebugLog.d("VideoFrameDecoder: first frame emitted (${bmp.width}x${bmp.height})")
@@ -156,20 +162,13 @@ class VideoFrameDecoder(
         }
     }
 
-    /** Reads a decoded YUV output buffer and converts it to a Bitmap via NV21 -> JPEG. */
-    private fun outputBufferToBitmap(
-        dec: MediaCodec,
-        index: Int,
-        outFormat: MediaFormat,
-        width: Int,
-        height: Int
-    ): Bitmap? {
-        val buffer = dec.getOutputBuffer(index) ?: return null
-        buffer.rewind()
-        val data = ByteArray(buffer.remaining())
-        buffer.get(data)
-
-        val nv21 = toNv21(data, outFormat, width, height) ?: return null
+    /**
+     * Converts a decoder-provided YUV_420_888 Image to a Bitmap using the Image's own plane
+     * descriptors (row/pixel strides), so it's correct for planar (I420), semi-planar (NV12),
+     * and vendor variants alike. Builds NV21 (Y + interleaved V,U) then JPEG-decodes it.
+     */
+    private fun imageToBitmap(image: android.media.Image, width: Int, height: Int): Bitmap? {
+        val nv21 = imageToNv21(image, width, height)
         val yuv = YuvImage(nv21, ImageFormat.NV21, width, height, null)
         val out = ByteArrayOutputStream()
         yuv.compressToJpeg(Rect(0, 0, width, height), 85, out)
@@ -177,50 +176,45 @@ class VideoFrameDecoder(
         return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
     }
 
-    /**
-     * Converts a raw decoder output buffer to NV21, handling the two color formats that cover the
-     * vast majority of hardware decoders:
-     *  - COLOR_FormatYUV420Planar (I420): Y plane, then U plane, then V plane.
-     *  - COLOR_FormatYUV420SemiPlanar (NV12): Y plane, then interleaved UV.
-     * NV21 wants Y followed by interleaved VU.
-     */
-    private fun toNv21(data: ByteArray, outFormat: MediaFormat, width: Int, height: Int): ByteArray? {
-        val frameSize = width * height
-        val expected = frameSize + frameSize / 2
-        if (data.size < expected) return null
+    /** Packs an Image's Y/U/V planes into NV21, honoring each plane's row and pixel stride. */
+    private fun imageToNv21(image: android.media.Image, width: Int, height: Int): ByteArray {
+        val nv21 = ByteArray(width * height * 3 / 2)
+        val yPlane = image.planes[0]
+        val uPlane = image.planes[1]
+        val vPlane = image.planes[2]
 
-        val colorFormat = try { outFormat.getInteger(MediaFormat.KEY_COLOR_FORMAT) } catch (_: Throwable) { 0 }
-        val nv21 = ByteArray(expected)
-        // Copy Y as-is.
-        System.arraycopy(data, 0, nv21, 0, frameSize)
-
-        val chromaSize = frameSize / 4
-        when (colorFormat) {
-            MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar -> {
-                // NV12: Y then U,V interleaved. Swap to V,U for NV21.
-                val uvStart = frameSize
-                var o = frameSize
-                var i = 0
-                while (i < chromaSize) {
-                    val u = data[uvStart + i * 2]
-                    val v = data[uvStart + i * 2 + 1]
-                    nv21[o++] = v
-                    nv21[o++] = u
-                    i++
-                }
+        // --- Y ---
+        val yBuf = yPlane.buffer
+        val yRowStride = yPlane.rowStride
+        var pos = 0
+        if (yRowStride == width) {
+            yBuf.get(nv21, 0, width * height)
+            pos = width * height
+        } else {
+            val row = ByteArray(yRowStride)
+            for (r in 0 until height) {
+                yBuf.position(r * yRowStride)
+                yBuf.get(row, 0, minOf(yRowStride, row.size))
+                System.arraycopy(row, 0, nv21, pos, width)
+                pos += width
             }
-            else -> {
-                // Assume planar I420: Y, then U plane, then V plane. (Also the fallback for the
-                // flexible format we requested, COLOR_FormatYUV420Flexible.)
-                val uStart = frameSize
-                val vStart = frameSize + chromaSize
-                var o = frameSize
-                var i = 0
-                while (i < chromaSize) {
-                    nv21[o++] = data[vStart + i] // V
-                    nv21[o++] = data[uStart + i] // U
-                    i++
-                }
+        }
+
+        // --- V,U interleaved (NV21 order) ---
+        val chromaHeight = height / 2
+        val chromaWidth = width / 2
+        val uBuf = uPlane.buffer
+        val vBuf = vPlane.buffer
+        val uRowStride = uPlane.rowStride
+        val vRowStride = vPlane.rowStride
+        val uPixStride = uPlane.pixelStride
+        val vPixStride = vPlane.pixelStride
+
+        var offset = width * height
+        for (r in 0 until chromaHeight) {
+            for (c in 0 until chromaWidth) {
+                nv21[offset++] = vBuf.get(r * vRowStride + c * vPixStride)
+                nv21[offset++] = uBuf.get(r * uRowStride + c * uPixStride)
             }
         }
         return nv21
