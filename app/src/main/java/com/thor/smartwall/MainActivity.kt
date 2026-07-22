@@ -198,12 +198,9 @@ class MainActivity : AppCompatActivity() {
             type.startsWith("video/") -> {
                 videoUri = uri.toString()
                 mode = WallMode.VIDEO
-                // Any previously pre-split files belong to the OLD video - discard them.
-                clearSplitVideoFiles()
                 restoreUiFromPrefs()
                 renderPreview()
                 Toast.makeText(this, R.string.video_loaded, Toast.LENGTH_SHORT).show()
-                promptPreSplitVideo(uri)
             }
             type.startsWith("image/") -> {
                 if (mode == WallMode.GIF || mode == WallMode.VIDEO) {

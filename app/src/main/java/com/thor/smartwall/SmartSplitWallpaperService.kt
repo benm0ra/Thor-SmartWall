@@ -320,37 +320,26 @@ class SmartSplitWallpaperService : WallpaperService() {
         }
 
         /**
-         * Video playback. MediaPlayer cannot render to this device's wallpaper surface at all, so
-         * every path decodes frames with MediaCodec and draws them to the Canvas instead.
-         * 1. Pre-split files exist -> decode this screen's own cropped file. Smooth AND split.
-         * 2. Otherwise -> the choppy frame-sampled fallback (still correctly split), which the
-         *    user can upgrade by choosing "Prepare it" when picking the video.
-         *
-         * (The old "Smooth mode = one MediaPlayer, duplicated" path is retired - it never worked
-         * on this hardware. If a video hasn't been pre-split we use the sampled fallback.)
+         * Video: decode the original file and apply the real per-screen spatial crop to every
+         * frame (setupVideoDecodeSplit). MediaPlayer can't draw to this wallpaper surface, and the
+         * library "pre-split" only center-cropped (never truly split), so this is the one path that
+         * produces smooth, correctly-split video.
          */
         private fun setupVideo(holder: SurfaceHolder) {
-            val ctx = applicationContext
-            val topPath = ctx.splitVideoTopPath
-            val bottomPath = ctx.splitVideoBottomPath
-            val haveSplitFiles = topPath != null && bottomPath != null &&
-                java.io.File(topPath).exists() && java.io.File(bottomPath).exists()
-
-            if (haveSplitFiles) {
-                setupVideoPreSplit(holder, topPath!!, bottomPath!!)
-            } else {
-                setupVideoSplit()
-            }
+            setupVideoDecodeSplit()
         }
 
         /**
-         * Plays the pre-cropped file for THIS screen by decoding it frame-by-frame with MediaCodec
-         * and drawing each frame to the wallpaper Canvas. This is the path that actually works on
-         * the Thor: MediaPlayer cannot render to a wallpaper surface here (fails with EINVAL), but
-         * Canvas bitmap drawing works. Because the files are already cropped per screen, decode is
-         * the only per-frame cost, so this runs far smoother than the old sampled slideshow.
+         * Decodes the ORIGINAL full video frame-by-frame and applies this screen's true spatial
+         * crop (the same SplitEngine crop images use) to every frame - so the top screen shows the
+         * top region and the bottom screen the bottom region, lined up across the hinge.
+         *
+         * This replaces the old approach of playing library-transcoded "split" files, which only
+         * center-cropped to each screen's aspect ratio and therefore showed nearly-identical
+         * content on both screens (the "duplicated" bug). The transcoder can't do a real spatial
+         * split; SplitEngine can, so we crop live per frame instead.
          */
-        private fun setupVideoPreSplit(holder: SurfaceHolder, topPath: String, bottomPath: String) {
+        private fun setupVideoDecodeSplit() {
             readyBitmap = null
             videoFrames = emptyList()
             gifDrawable?.callback = null
@@ -361,27 +350,81 @@ class SmartSplitWallpaperService : WallpaperService() {
             frameDecoder = null
             latestVideoFrame = null
 
-            val isTop = (myLogicalScreen?.order ?: 0) == 0
-            val path = if (isTop) topPath else bottomPath
-            val f = java.io.File(path)
-            val myGeneration = ++contentGeneration
-            DebugLog.d("setupVideoPreSplit(decode): gen=$myGeneration screen id=${myLogicalScreen?.displayId} isTop=$isTop size=${if (f.exists()) f.length()/1024 else -1}KB -> $path")
-
-            if (!f.exists() || f.length() == 0L) {
-                DebugLog.w("setupVideoPreSplit(decode): file missing/empty")
+            val ctx = applicationContext
+            val screen = myLogicalScreen
+            val uriStr = ctx.videoUri
+            if (screen == null || uriStr == null) {
+                DebugLog.w("setupVideoDecodeSplit: no screen/uri; drawing diagnostic")
                 drawFrame()
                 return
             }
 
-            val fps = 30
-            val decoder = VideoFrameDecoder(f, fps) { bmp ->
-                // Called on the decoder's thread. Stash the frame and ask the main thread to draw.
-                if (myGeneration != contentGeneration) return@VideoFrameDecoder
-                latestVideoFrame = bmp
-                handler.post { if (myGeneration == contentGeneration) drawFrame() }
+            // The decoder wants a File. content:// URIs aren't files, so we copy the source into
+            // our own cache once (cheap vs. transcoding) and decode from there.
+            val srcFile = cacheVideoFile(uriStr)
+            if (srcFile == null || !srcFile.exists() || srcFile.length() == 0L) {
+                DebugLog.e("setupVideoDecodeSplit: couldn't obtain a decodable file for $uriStr")
+                drawFrame()
+                return
             }
+
+            val screensSnapshot = allScreensLogical
+            val orientation = if (ctx.orientationVertical) StackOrientation.VERTICAL else StackOrientation.HORIZONTAL
+            val gap = ctx.gapFraction
+            val independent = ctx.independentMode
+            val myGeneration = ++contentGeneration
+            DebugLog.d("setupVideoDecodeSplit: gen=$myGeneration screen id=${screen.displayId} independent=$independent -> ${srcFile.name}")
+
+            val decoder = VideoFrameDecoder(
+                file = srcFile,
+                targetFps = 30,
+                transform = { full ->
+                    // Crop this decoded full frame to THIS screen using the same math as images.
+                    try {
+                        if (independent) {
+                            val sources = mapOf(
+                                (screensSnapshot.getOrNull(0)?.displayId ?: 0) to full,
+                                (screensSnapshot.getOrNull(1)?.displayId ?: 1) to full
+                            )
+                            SplitEngine.computeIndependentCrops(sources, screensSnapshot)[screen.displayId]
+                        } else {
+                            SplitEngine.computeCrops(full, screensSnapshot, orientation, gap)[screen.displayId]
+                        }
+                    } catch (t: Throwable) {
+                        null
+                    }
+                },
+                onFrame = { bmp ->
+                    if (myGeneration != contentGeneration) return@VideoFrameDecoder
+                    latestVideoFrame = bmp
+                    handler.post { if (myGeneration == contentGeneration) drawFrame() }
+                }
+            )
             frameDecoder = decoder
             decoder.start()
+        }
+
+        /**
+         * Copies a content:// (or file://) video into a stable cache file the MediaCodec decoder
+         * can open by path. Cached by a hash of the URI so we only copy once per distinct video.
+         */
+        private fun cacheVideoFile(uriStr: String): java.io.File? {
+            return try {
+                val cacheDir = applicationContext.filesDir
+                val name = "video_src_${uriStr.hashCode().toUInt()}.mp4"
+                val out = java.io.File(cacheDir, name)
+                if (out.exists() && out.length() > 0L) return out
+                // Clean up any older cached sources so we don't accumulate copies.
+                cacheDir.listFiles()?.filter { it.name.startsWith("video_src_") && it.name != name }
+                    ?.forEach { runCatching { it.delete() } }
+                applicationContext.contentResolver.openInputStream(uriStr.toUri())?.use { input ->
+                    out.outputStream().use { output -> input.copyTo(output) }
+                }
+                out
+            } catch (t: Throwable) {
+                DebugLog.e("cacheVideoFile: failed to cache $uriStr", t)
+                null
+            }
         }
 
         /** Smooth path: hand the file straight to MediaPlayer, which draws directly to the surface. */
