@@ -5,29 +5,29 @@ import android.graphics.BitmapFactory
 import android.graphics.ImageFormat
 import android.graphics.Rect
 import android.graphics.YuvImage
-import android.media.Image
-import android.media.ImageReader
 import android.media.MediaCodec
+import android.media.MediaCodecInfo
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.os.Handler
 import android.os.HandlerThread
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.nio.ByteBuffer
 
 /**
- * Decodes a video file into a continuous stream of Bitmaps using MediaCodec + ImageReader, looping
- * forever, handing each decoded frame to [onFrame] to be drawn to a Canvas.
+ * Decodes a video file into a continuous stream of Bitmaps, looping forever, handing each frame to
+ * [onFrame] to be drawn to a Canvas.
  *
  * Why this exists: on the AYN Thor, MediaPlayer cannot render video onto a WallpaperService
- * surface (fails with EINVAL as soon as it draws - confirmed in field logs). But drawing Bitmaps
- * to the wallpaper Canvas works. So we decode frames ourselves and draw them.
+ * surface (fails with EINVAL as soon as it draws). Canvas bitmap drawing works, so we decode
+ * frames ourselves.
  *
- * Format note (the thing that made the first attempt produce no frames): hardware AVC decoders
- * output YUV, not RGBA. Requesting an RGBA_8888 ImageReader silently yielded zero frames. This
- * version requests YUV_420_888 (which hardware decoders DO feed) and converts each frame to a
- * Bitmap via NV21 -> YuvImage -> JPEG -> Bitmap. That conversion isn't the fastest possible, but
- * it's dependency-free and works on essentially any device; correctness first, optimize later.
+ * Approach: ByteBuffer output (NO output Surface / ImageReader). Rendering to an ImageReader
+ * surface produced zero frames on this device's hardware decoder (the decode loop spun without
+ * ever delivering a frame). Decoding to plain output ByteBuffers is the older, slower, but far
+ * more universally-supported path: we read the raw YUV bytes the codec emits, look at the codec's
+ * reported color format, convert to NV21 -> JPEG -> Bitmap. Correctness first.
  */
 class VideoFrameDecoder(
     private val file: File,
@@ -40,7 +40,6 @@ class VideoFrameDecoder(
 
     private var extractor: MediaExtractor? = null
     private var codec: MediaCodec? = null
-    private var imageReader: ImageReader? = null
     @Volatile private var framesEmitted = 0
 
     fun start() {
@@ -58,10 +57,8 @@ class VideoFrameDecoder(
         runCatching { codec?.stop() }
         runCatching { codec?.release() }
         runCatching { extractor?.release() }
-        runCatching { imageReader?.close() }
         codec = null
         extractor = null
-        imageReader = null
         thread?.quitSafely()
         thread = null
         handler = null
@@ -92,42 +89,30 @@ class VideoFrameDecoder(
         val height = format.getInteger(MediaFormat.KEY_HEIGHT)
         val mime = format.getString(MediaFormat.KEY_MIME)!!
 
-        val reader = ImageReader.newInstance(width, height, ImageFormat.YUV_420_888, 3)
-        imageReader = reader
-        reader.setOnImageAvailableListener({ r ->
-            val img = try { r.acquireLatestImage() } catch (_: Throwable) { null }
-            if (img != null) {
-                try {
-                    val bmp = yuvImageToBitmap(img, width, height)
-                    if (bmp != null && running) {
-                        framesEmitted++
-                        if (framesEmitted == 1) DebugLog.d("VideoFrameDecoder: first frame emitted for ${file.name}")
-                        onFrame(bmp)
-                    }
-                } catch (t: Throwable) {
-                    DebugLog.e("VideoFrameDecoder: frame convert failed", t)
-                } finally {
-                    img.close()
-                }
-            }
-        }, handler)
+        // Ask the decoder for a flexible YUV 4:2:0 output we know how to read.
+        format.setInteger(
+            MediaFormat.KEY_COLOR_FORMAT,
+            MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible
+        )
 
         val dec = MediaCodec.createDecoderByType(mime)
         codec = dec
-        dec.configure(format, reader.surface, null, 0)
+        dec.configure(format, null, null, 0) // null surface -> ByteBuffer output
         dec.start()
-        DebugLog.d("VideoFrameDecoder: started ${file.name} ${width}x$height mime=$mime fps=$targetFps")
+        DebugLog.d("VideoFrameDecoder: started ${file.name} ${width}x$height mime=$mime fps=$targetFps (bytebuffer)")
 
         val bufferInfo = MediaCodec.BufferInfo()
         val frameIntervalMs = (1000L / targetFps.coerceIn(1, 60))
+        var outColorFormat = 0
 
         while (running) {
+            // Feed input.
             val inIndex = dec.dequeueInputBuffer(10_000)
             if (inIndex >= 0) {
                 val inBuf = dec.getInputBuffer(inIndex)!!
                 val sampleSize = ex.readSampleData(inBuf, 0)
                 if (sampleSize < 0) {
-                    ex.seekTo(0, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+                    ex.seekTo(0, MediaExtractor.SEEK_TO_CLOSEST_SYNC) // loop
                     val retry = ex.readSampleData(inBuf, 0)
                     if (retry < 0) {
                         dec.queueInputBuffer(inIndex, 0, 0, 0, 0)
@@ -142,15 +127,49 @@ class VideoFrameDecoder(
             }
 
             val outIndex = dec.dequeueOutputBuffer(bufferInfo, 10_000)
-            if (outIndex >= 0) {
-                dec.releaseOutputBuffer(outIndex, true)
-                try { Thread.sleep(frameIntervalMs) } catch (_: InterruptedException) {}
+            when {
+                outIndex >= 0 -> {
+                    if (bufferInfo.size > 0) {
+                        try {
+                            val outFormat = dec.getOutputFormat(outIndex)
+                            val bmp = outputBufferToBitmap(dec, outIndex, outFormat, width, height)
+                            if (bmp != null && running) {
+                                framesEmitted++
+                                if (framesEmitted == 1) DebugLog.d("VideoFrameDecoder: first frame emitted (${bmp.width}x${bmp.height})")
+                                onFrame(bmp)
+                            }
+                        } catch (t: Throwable) {
+                            if (framesEmitted == 0) DebugLog.e("VideoFrameDecoder: convert failed", t)
+                        }
+                    }
+                    dec.releaseOutputBuffer(outIndex, false)
+                    try { Thread.sleep(frameIntervalMs) } catch (_: InterruptedException) {}
+                }
+                outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                    outColorFormat = try {
+                        dec.outputFormat.getInteger(MediaFormat.KEY_COLOR_FORMAT)
+                    } catch (_: Throwable) { 0 }
+                    DebugLog.d("VideoFrameDecoder: output format changed, colorFormat=$outColorFormat")
+                }
+                // INFO_TRY_AGAIN_LATER (-1) and others: just keep looping.
             }
         }
     }
 
-    private fun yuvImageToBitmap(image: Image, width: Int, height: Int): Bitmap? {
-        val nv21 = yuv420ToNv21(image, width, height)
+    /** Reads a decoded YUV output buffer and converts it to a Bitmap via NV21 -> JPEG. */
+    private fun outputBufferToBitmap(
+        dec: MediaCodec,
+        index: Int,
+        outFormat: MediaFormat,
+        width: Int,
+        height: Int
+    ): Bitmap? {
+        val buffer = dec.getOutputBuffer(index) ?: return null
+        buffer.rewind()
+        val data = ByteArray(buffer.remaining())
+        buffer.get(data)
+
+        val nv21 = toNv21(data, outFormat, width, height) ?: return null
         val yuv = YuvImage(nv21, ImageFormat.NV21, width, height, null)
         val out = ByteArrayOutputStream()
         yuv.compressToJpeg(Rect(0, 0, width, height), 85, out)
@@ -158,44 +177,50 @@ class VideoFrameDecoder(
         return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
     }
 
-    private fun yuv420ToNv21(image: Image, width: Int, height: Int): ByteArray {
-        val ySize = width * height
-        val nv21 = ByteArray(ySize + ySize / 2)
+    /**
+     * Converts a raw decoder output buffer to NV21, handling the two color formats that cover the
+     * vast majority of hardware decoders:
+     *  - COLOR_FormatYUV420Planar (I420): Y plane, then U plane, then V plane.
+     *  - COLOR_FormatYUV420SemiPlanar (NV12): Y plane, then interleaved UV.
+     * NV21 wants Y followed by interleaved VU.
+     */
+    private fun toNv21(data: ByteArray, outFormat: MediaFormat, width: Int, height: Int): ByteArray? {
+        val frameSize = width * height
+        val expected = frameSize + frameSize / 2
+        if (data.size < expected) return null
 
-        val yPlane = image.planes[0]
-        val uPlane = image.planes[1]
-        val vPlane = image.planes[2]
+        val colorFormat = try { outFormat.getInteger(MediaFormat.KEY_COLOR_FORMAT) } catch (_: Throwable) { 0 }
+        val nv21 = ByteArray(expected)
+        // Copy Y as-is.
+        System.arraycopy(data, 0, nv21, 0, frameSize)
 
-        val yBuffer = yPlane.buffer
-        val yRowStride = yPlane.rowStride
-        var pos = 0
-        if (yRowStride == width) {
-            yBuffer.get(nv21, 0, ySize)
-            pos = ySize
-        } else {
-            val row = ByteArray(yRowStride)
-            for (r in 0 until height) {
-                yBuffer.position(r * yRowStride)
-                yBuffer.get(row, 0, minOf(yRowStride, row.size))
-                System.arraycopy(row, 0, nv21, pos, width)
-                pos += width
+        val chromaSize = frameSize / 4
+        when (colorFormat) {
+            MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar -> {
+                // NV12: Y then U,V interleaved. Swap to V,U for NV21.
+                val uvStart = frameSize
+                var o = frameSize
+                var i = 0
+                while (i < chromaSize) {
+                    val u = data[uvStart + i * 2]
+                    val v = data[uvStart + i * 2 + 1]
+                    nv21[o++] = v
+                    nv21[o++] = u
+                    i++
+                }
             }
-        }
-
-        val chromaHeight = height / 2
-        val chromaWidth = width / 2
-        val vBuffer = vPlane.buffer
-        val uBuffer = uPlane.buffer
-        val vRowStride = vPlane.rowStride
-        val uRowStride = uPlane.rowStride
-        val vPixStride = vPlane.pixelStride
-        val uPixStride = uPlane.pixelStride
-
-        var offset = ySize
-        for (r in 0 until chromaHeight) {
-            for (c in 0 until chromaWidth) {
-                nv21[offset++] = vBuffer.get(r * vRowStride + c * vPixStride)
-                nv21[offset++] = uBuffer.get(r * uRowStride + c * uPixStride)
+            else -> {
+                // Assume planar I420: Y, then U plane, then V plane. (Also the fallback for the
+                // flexible format we requested, COLOR_FormatYUV420Flexible.)
+                val uStart = frameSize
+                val vStart = frameSize + chromaSize
+                var o = frameSize
+                var i = 0
+                while (i < chromaSize) {
+                    nv21[o++] = data[vStart + i] // V
+                    nv21[o++] = data[uStart + i] // U
+                    i++
+                }
             }
         }
         return nv21
